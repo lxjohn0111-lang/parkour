@@ -41,7 +41,7 @@ function shared() {
   cone.translate(0, -0.5, 0); cone.rotateX(Math.PI / 2);
   const cc = [];
   const cp = cone.attributes.position;
-  for (let i = 0; i < cp.count; i++) { const k = Math.pow(1 - clamp(-cp.getZ(i), 0, 1), 1.6); cc.push(k, k, k); }
+  for (let i = 0; i < cp.count; i++) { const k = 0.22 + 0.78 * Math.pow(1 - clamp(-cp.getZ(i), 0, 1), 1.4); cc.push(k, k, k); }
   cone.setAttribute('color', new THREE.Float32BufferAttribute(cc, 3));
   const star = new GeoBuilder();
   star.box(-0.16, -0.008, -0.035, 0.16, 0.008, 0.035, 0xd8dcec);
@@ -88,13 +88,13 @@ class Guard {
     this.anim = 0; this.attackT = 0; this.attackCd = 0; this.stun = 0; this.climb = null; this.jumpCd = 0; this.stuck = 0; this.barkCd = 0;
     this.target = null; this.sees = false; this.extra = false; this.dead = false; this.lit = true; this.side = 0; this.sideT = 0;
     if (tower) {
-      this.range = tower.range; this.half = 0.13; this.pos.set(tower.x, tower.y, tower.z);
+      this.range = tower.range; this.half = 0.17; this.pos.set(tower.x, tower.y, tower.z);
       this.sweep = Math.random() * 6; this.aim = new THREE.Vector3(tower.aimX, 6, tower.aimZ); this.aimCur = this.aim.clone();
       this.fireT = 2; this.lampOff = 0;
       this.lamp = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.6), actors.lanternMat);
       this.lamp.position.set(tower.x, tower.y + 1.35, tower.z);
       actors.group.add(this.lamp);
-      this.coneMat.opacity = 0.22;
+      this.coneMat.opacity = 0.3;
     } else {
       this.range = def.kind === 'patrol' ? 15 : 17; this.half = 0.56;
       const p = def.pts[0];
@@ -347,7 +347,8 @@ class Guard {
     const hitD = w.ray(this.eye.x, this.eye.y, this.eye.z, this.dir.x, this.dir.y, this.dir.z, L, 0.6);
     const len = hitD > 0 ? Math.min(L, hitD + 1.5) : L;
     this.cone.scale.set(len * Math.tan(this.half), len * Math.tan(this.half), len);
-    this.coneMat.color.setHex(alert ? 0xff5a3a : this.aware > 0.3 ? 0xffa040 : 0xffe2a0);
+    this.lightHex = alert ? 0xff5a3a : this.aware > 0.3 ? 0xffa040 : 0xffe2a0;
+    this.coneMat.color.setHex(this.lightHex).multiplyScalar(2.4);
   }
 
   bark(kind) {
@@ -389,7 +390,8 @@ class Guard {
     this.cone.rotation.set(-0.12, ly, 0, 'YXZ');
     this.cone.scale.set(L * Math.tan(this.half), L * Math.tan(this.half) * 0.75, L);
     const c = this.state === 'chase' ? 0xff4a34 : this.aware > 0.35 || this.state === 'search' || this.state === 'investigate' ? 0xffa040 : 0xffd98a;
-    this.coneMat.color.setHex(c);
+    this.lightHex = c;
+    this.coneMat.color.setHex(c).multiplyScalar(1.5);
   }
 
   remove() {
@@ -810,8 +812,8 @@ export class Actors {
       s.angle = g.tower ? g.half * 1.05 : g.half * 0.95;
       s.distance = g.tower ? g.range * 1.15 : g.range * 0.95;
       s.penumbra = g.tower ? 0.12 : 0.3;
-      s.intensity = g.tower ? 5.5 : 2.6;
-      s.color.copy(g.coneMat.color);
+      s.intensity = g.tower ? 11 : 5;
+      s.color.setHex(g.lightHex || 0xffd98a);
     }
   }
 }

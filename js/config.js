@@ -35,7 +35,7 @@ export const PALETTES = [
   {
     key: 'festival', name: 'Asakusa Festival', jp: '浅草', time: 'Festival Night',
     skyTop: 0x1a0f3e, skyMid: 0x5b2a7a, skyHor: 0xe8587c, sun: 0xffb074, cloudA: 0xff8a8c, cloudB: 0x7a3a8a,
-    sunAz: 0.78, sunEl: 0.55, sunInt: 2.9, stars: 0.6,
+    sunAz: 0.78, sunEl: 0.55, sunInt: 2.9, stars: 0.6, fire: 1,
     hemiSky: 0x8a56c8, hemiGround: 0xb0546a, hemiInt: 2.1,
     fog: 0x95508f, fogDensity: 0.0046, ink: 0x1a0c2a, tint: [1.04, 0.99, 1.0],
     tile: [0x6f5f9a, 0x62538c, 0x7b6aa6], ridge: 0x40325e, under: 0x2a1c3e,
@@ -115,7 +115,7 @@ export function endlessLevel(depth, seed) {
 export function dailyLevel(seed) {
   return {
     id: 99, daily: true, name: 'Daily Night', jp: '今宵', d: seed % 4, seed: (seed * 2654435761) >>> 0,
-    rows: 16, sentries: 10, patrols: 5, towers: 3, feats: { b: 0.22, c: 0.18, k: 0.18 }, par: 0,
+    rows: 16, sentries: 10, patrols: 5, towers: 3, feats: { b: 0.22, c: 0.18, k: 0.18 }, par: 81,
     intro: 'Tonight\'s rooftops, the same for every thief in the city. One night, one best run.', hints: [],
   };
 }

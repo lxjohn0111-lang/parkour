@@ -92,6 +92,7 @@ export function makeSky() {
       uSunDir: { value: new THREE.Vector3(0, 0.3, -1) },
       uSunSize: { value: 0.9994 },
       uStars: { value: 0 },
+      uFire: { value: 0 },
       uTime: { value: 0 },
     },
     vertexShader: /* glsl */ `
@@ -106,7 +107,7 @@ export function makeSky() {
       precision highp float;
       varying vec3 vDir;
       uniform vec3 uTop, uMid, uHor, uSunCol, uCloudA, uCloudB, uSunDir;
-      uniform float uSunSize, uStars, uTime;
+      uniform float uSunSize, uStars, uTime, uFire;
       float hash(vec2 p){ p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
       float noise(vec2 p){
         vec2 i = floor(p), f = fract(p); f = f*f*(3.0-2.0*f);
@@ -140,6 +141,23 @@ export function makeSky() {
           float m = smoothstep(0.56, 0.575, n) * smoothstep(0.02, 0.14, h) * (1.0 - smoothstep(0.55, 0.9, h));
           vec3 cc = mix(uCloudB, uCloudA, smoothstep(0.52, 0.56, n2));
           col = mix(col, cc, m * 0.92);
+        }
+        // festival fireworks: radial bursts low over the city (HDR, so they bloom)
+        if (uFire > 0.0 && h > 0.05) {
+          float az = atan(d.x, -d.z), el = asin(clamp(d.y, -1.0, 1.0));
+          for (int i = 0; i < 3; i++) {
+            float fi = float(i);
+            float tt = uTime * 0.31 + fi * 0.37;
+            float id = floor(tt), a = fract(tt);
+            vec2 c = vec2(hash(vec2(id, fi + 1.0)) * 2.2 - 1.1, 0.2 + hash(vec2(fi + 5.0, id)) * 0.26);
+            vec2 q = vec2((az - c.x) * cos(el), el - c.y);
+            float r = length(q), R = 0.2 * (1.0 - exp(-a * 5.0));
+            float spoke = smoothstep(0.55, 1.0, cos(atan(q.y, q.x) * 14.0 + fi * 1.7));
+            float band = smoothstep(R * 1.04, R * 0.9, r) * smoothstep(R * 0.25, R * 0.9, r);
+            vec3 fc = mix(vec3(1.0, 0.45, 0.3), vec3(1.0, 0.85, 0.4), hash(vec2(id, fi + 3.0)));
+            fc = mix(fc, vec3(0.55, 1.0, 0.85), step(0.7, hash(vec2(id + 7.0, fi))));
+            col += fc * (spoke * band + smoothstep(0.02, 0.0, r) * 0.6) * (1.0 - a) * (1.0 - a) * 3.5 * uFire;
+          }
         }
         // sun / moon disc (HDR so it blooms)
         float disc = smoothstep(uSunSize, uSunSize + 0.00012, sd);

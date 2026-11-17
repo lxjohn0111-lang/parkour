@@ -360,7 +360,11 @@ export class World {
     g.frame(); dec.frame();
     if (b.kind === 'kura') this.anchorPole(g, b.cx, b.ridgeY, b.cz);
     // pent-roof awnings on tall street fronts: the way back up from the street
-    if (b.kind === 'machiya' && b.h >= 5.0) for (const s of [1, -1]) this.awning(g, b, s);
+    if (b.kind === 'machiya' && b.h >= 5.3) for (const s of [1, -1]) {
+      this.awning(g, b, s, 2.95, 1.05);
+      // tall fronts get a second, narrower pent roof so every eave stays within reach
+      if (b.h >= 6.3) this.awning(g, b, s, b.h - 2.45, 0.8);
+    }
   }
 
   anchorPole(g, x, y, z) {
@@ -371,9 +375,9 @@ export class World {
     g.box(x + 0.05, y + 0.5, z - 0.01, x + 0.6, y + 1.2, z + 0.01, pal.red);
   }
 
-  awning(g, b, s) {
+  awning(g, b, s, y, depth) {
     const pal = this.pal;
-    const zw = s > 0 ? b.z1 : b.z0, zo = zw + s * 1.05, y = 2.95;
+    const zw = s > 0 ? b.z1 : b.z0, zo = zw + s * depth;
     const x0 = b.x0 + 0.1, x1 = b.x1 - 0.1;
     g.quadDir([x0, y - 0.32, zo], [x1, y - 0.32, zo], [x1, y, zw], [x0, y, zw], [0, 1, s], b.tile, 0, 1, [x0, 1.1, x1, 1.1, x1, 0, x0, 0]);
     g.quadDir([x0, y - 0.5, zo], [x1, y - 0.5, zo], [x1, y - 0.18, zw], [x0, y - 0.18, zw], [0, -1, 0], pal.under);
@@ -399,7 +403,7 @@ export class World {
       const H = R.range(11.5, 13);
       this.emitTower(g, dec, b.cx, b.cz, H);
       const pbz = this.path.find((p) => p.b.row === b.row);
-      this.towerDefs.push({ x: b.cx, z: b.cz, y: H, aimX: pbz.b.cx, aimZ: pbz.b.cz - 4, range: 46 });
+      this.towerDefs.push({ x: b.cx, z: b.cz, y: H, aimX: (pbz.b.x0 + pbz.b.x1) / 2, aimZ: (pbz.b.z0 + pbz.b.z1) / 2 - 4, range: 46 });
       for (let i = 0; i < 2; i++) P.pine(g, b.cx + (i ? 1 : -1) * (W / 2 - 1.8), 0, b.cz + R.range(-3, 3), R.range(0.8, 1.1), pal, R);
     } else {
       const n = 1 + R.int(0, 1);
@@ -498,6 +502,14 @@ export class World {
     this.addSolid(gx - hw2, cz - hd2, gx + hw2, cz + hd2, h1, T_FLAT, y2);
     const e2 = r2.eaveY + 0.3;
     this.addSolid(gx - hw2 - 1.3, cz - hd2 - 1.3, gx + hw2 + 1.3, cz + hd2 + 1.3, e2 - 0.3, T_HIP, e2, r2.ridgeY, { rlx: r2.rl });
+    for (const sx of [-1, 1]) {
+      const cx2 = gx + sx * (hw - 3), zf = z1 - 0.5 + 2.05;
+      for (let k = 0; k < 3; k++) {
+        const x = cx2 + sx * k * 1.2, top = 1.15 * (3 - k);
+        for (let j = 0; j < 3 - k; j++) P.crate(g, x, j * 1.15, zf, 1.15, 1.15, 1.15, pal, R);
+        this.addSolid(x - 0.6, zf - 0.58, x + 0.6, zf + 0.58, 0, T_FLAT, top);
+      }
+    }
     // the kite, and a beacon you can read from the first roof
     const ky = r2.ridgeY;
     this.goal = { x: gx, y: ky, z: cz, r: 2.6 };
@@ -621,11 +633,17 @@ export class World {
       if (!rw) continue;
       for (const b of rw.b) {
         if (b.kind === 'yard') continue;
-        const need = b.kind !== 'machiya' || b.h < 5.0;
+        const need = b.kind !== 'machiya' || b.h < 5.3;
         if (!need && !R.chance(0.35)) continue;
-        const x = R.range(b.x0 + 1.5, b.x1 - 1.5);
+        const x = R.range(b.x0 + 1.5, b.x1 - 3.4);
         const zwall = s < 0 ? b.z0 : b.z1;
-        const zz = zwall + (s < 0 ? -1 : 1) * 0.62;
+        const temple = b.kind === 'temple';
+        // wide temple eaves: stand the stack clear of the overhang, and build it a step higher
+        const zz = zwall + (s < 0 ? -1 : 1) * (temple ? 2.05 : 0.62);
+        if (temple) {
+          P.crate(g, x + 2.4, 0, zz, 1.15, 1.15, 1.15, pal, R); P.crate(g, x + 2.4, 1.15, zz, 1.1, 1.1, 1.1, pal, R); P.crate(g, x + 2.4, 2.25, zz, 1.0, 1.0, 1.0, pal, R);
+          this.addSolid(x + 1.82, zz - 0.58, x + 2.98, zz + 0.58, 0, T_FLAT, 3.25);
+        }
         P.crate(g, x, 0, zz, 1.15, 1.15, 1.15, pal, R);
         this.addSolid(x - 0.58, zz - 0.58, x + 0.58, zz + 0.58, 0, T_FLAT, 1.15);
         if (b.h > 4.3 || b.kind !== 'machiya') {

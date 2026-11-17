@@ -7,7 +7,7 @@ import { STEP } from './world.js';
 
 const GRAV = 24, JUMP = 7.9, RUN = 8.7, SNEAK = 3.3, RADIUS = 0.35;
 const H_STAND = 1.75, H_CROUCH = 1.0, EYE_STAND = 1.62, EYE_CROUCH = 0.92;
-const REACH = 2.45;
+const REACH = 2.8;
 
 export class Player {
   constructor(game) {
@@ -241,11 +241,13 @@ export class Player {
   // Ledge detection: is there a surface within reach just ahead?
   tryMantle(dx, dz, vault) {
     const w = this.game.world, p = this.pos;
-    for (const d of [0.6, 0.9]) {
+    // probe ahead first, then right overhead (grabbing an eave you are standing under)
+    for (const d of vault ? [0.6, 0.9] : [0.6, 0.9, 0.3, 0]) {
       const px = p.x + dx * d, pz = p.z + dz * d;
       const top = w.groundAt(px, pz, p.y + (vault ? 1.3 : REACH), 0);
       const rise = top - p.y;
       if (rise < (vault ? STEP + 0.01 : 0.55) || rise > (vault ? 1.3 : REACH)) continue;
+      if (d < 0.5 && rise < this.height) continue;
       if (w.solidAt(px, top + 0.5, pz) || w.solidAt(px, top + 1.1, pz)) continue;
       const hs = Math.hypot(this.vel.x, this.vel.z);
       const quick = rise < 1.35;

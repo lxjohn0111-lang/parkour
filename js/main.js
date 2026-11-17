@@ -154,7 +154,7 @@ class Game {
     const su = this.sky.material.uniforms;
     su.uTop.value.setHex(pal.skyTop); su.uMid.value.setHex(pal.skyMid); su.uHor.value.setHex(pal.skyHor);
     su.uSunCol.value.setHex(pal.sun); su.uCloudA.value.setHex(pal.cloudA); su.uCloudB.value.setHex(pal.cloudB);
-    su.uSunDir.value.copy(this.world.sunDir); su.uStars.value = pal.stars;
+    su.uSunDir.value.copy(this.world.sunDir); su.uStars.value = pal.stars; su.uFire.value = pal.fire || 0;
     su.uSunSize.value = pal.key === 'moon' || pal.key === 'festival' ? 0.9984 : 0.9991;
     this.hemi.color.setHex(pal.hemiSky); this.hemi.groundColor.setHex(pal.hemiGround); this.hemi.intensity = pal.hemiInt;
     this.sun.color.setHex(pal.sun); this.sun.intensity = pal.sunInt;

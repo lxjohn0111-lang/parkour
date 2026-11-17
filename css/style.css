@@ -72,6 +72,7 @@ button { font: inherit; color: inherit; cursor: pointer; border: 0; background: 
 #tool-hook .n { font-family: var(--brush); color: var(--gold); }
 body.touch .tool .key { display: none; }
 
+#lockhint { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); background: var(--paper); color: var(--ink); text-shadow: none; font-weight: 700; letter-spacing: .3em; font-size: 1.6vh; padding: .8vh 2vh; animation: pulse .7s infinite alternate; }
 #cross { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
 #cross i { position: absolute; left: -.3vh; top: -.3vh; width: .6vh; height: .6vh; border-radius: 50%; background: var(--paper); box-shadow: 0 0 0 .18vh rgba(23, 18, 46, .7); }
 #threat { position: absolute; left: 50%; top: 50%; width: 0; height: 0; opacity: 0; }
@@ -160,7 +161,7 @@ h1 { font-size: 9vh; font-weight: 700; letter-spacing: .16em; line-height: 1; pa
 .tag { color: var(--dim); letter-spacing: .12em; font-size: 1.7vh; margin: 2.2vh 0 2.8vh; }
 nav { display: flex; flex-direction: column; gap: 1vh; }
 .btn { position: relative; display: flex; align-items: baseline; justify-content: space-between; gap: 2vh; width: 100%; padding: 1.35vh 2vh 1.35vh 2.4vh; background: rgba(36, 27, 69, .9); border-left: .6vh solid var(--line); color: var(--paper); text-align: left; transition: transform .12s, background .12s, border-color .12s; pointer-events: auto; }
-.btn span { font-size: 2.3vh; font-weight: 700; letter-spacing: .18em; }
+.btn span { font-size: 2.3vh; font-weight: 700; letter-spacing: .18em; white-space: nowrap; }
 .btn small { font-size: 1.3vh; letter-spacing: .1em; color: var(--dim); font-weight: 400; text-align: right; }
 .btn:hover, .btn:focus-visible { transform: translateX(.8vh); background: #32265e; border-color: var(--paper); outline: none; }
 .btn:active { transform: translateX(.3vh) scale(.99); }
@@ -199,7 +200,8 @@ nav { display: flex; flex-direction: column; gap: 1vh; }
 .night:hover { transform: translateY(-.4vh); border-color: var(--paper); }
 .night .num { font-size: 1.2vh; letter-spacing: .3em; color: var(--gold); font-weight: 700; }
 .night .nm { font-size: 2vh; font-weight: 700; letter-spacing: .06em; line-height: 1.15; }
-.night .jp { position: absolute; right: 1.2vh; top: .8vh; font-size: 2.6vh; opacity: .5; }
+.night .jp { position: absolute; right: 1.2vh; top: 3.1vh; font-size: 2.5vh; opacity: .4; }
+.night .nm { padding-right: 20%; }
 .night .meta { margin-top: auto; display: flex; align-items: center; gap: .5vh; font-size: 1.3vh; color: var(--dim); letter-spacing: .08em; }
 .night .meta .rk { margin-left: auto; font-size: 2.2vh; font-weight: 700; color: var(--paper); }
 .night.locked { opacity: .38; pointer-events: none; }

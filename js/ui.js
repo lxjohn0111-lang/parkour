@@ -191,7 +191,7 @@ export class UI {
   toast(text) { const t = $('toast'); t.textContent = text; t.classList.remove('hidden'); this.toastT = 2.6; }
   flashTool(id) { const el = $(id); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
   clearTransient() {
-    for (const id of ['banner', 'hint', 'subs', 'intro', 'arrow-warn', 'ring']) $(id).classList.add('hidden');
+    for (const id of ['banner', 'hint', 'subs', 'intro', 'arrow-warn', 'ring', 'lockhint']) $(id).classList.add('hidden');
     $('pops').innerHTML = '';
     this.subT = this.hintT = this.bannerT = this.arrowT = this.introT = 0;
   }
@@ -211,6 +211,7 @@ export class UI {
     if (this.introT > 0 && (this.introT -= dt) <= 0) $('intro').classList.add('hidden');
     if (this.toastT > 0 && (this.toastT -= dt) <= 0) $('toast').classList.add('hidden');
     if (hud.classList.contains('hidden')) return;
+    this.cls($('lockhint'), 'hidden', !(g.state === 'playing' && !g.input.locked && !g.input.touch && !g.headless));
     $('hp-fill').style.transform = `scaleX(${clamp(g.hp / g.stats.maxHp, 0, 1)})`;
     $('flow-fill').style.transform = `scaleX(${p.flow.toFixed(3)})`;
     this.set('flow-label', p.flow > 0.08 ? `FLOW ×${(1 + p.flow * 2).toFixed(1)}` : 'FLOW');
