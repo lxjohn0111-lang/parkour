@@ -92,9 +92,9 @@ export class Input {
       const dx = j.x - j.ox, dy = j.y - j.oy, l = Math.hypot(dx, dy);
       if (j.id >= 0 && l > 8) { const m = Math.min(1, (l - 8) / 32); this.moveX = (dx / l) * m; this.moveZ = (-dy / l) * m; }
       else {
-        // run / turn buttons: a tap on RUN keeps you running until it is tapped again
-        this.moveZ = this.holdBack ? -1 : this.autoRun ? 1 : 0;
-        this.moveX = (this.holdRight ? 1 : 0) - (this.holdLeft ? 1 : 0);
+        // the stick can stay latched forward (see stickTap): keep running hands-free
+        this.moveZ = this.latch;
+        this.moveX = 0;
       }
       this.crouch = this.crouchToggle;
     }
@@ -106,7 +106,7 @@ export class Input {
   reset() {
     this.keys.clear(); this.jump = false; this.crouchToggle = false; this.endFrame();
     this.joy.id = -1; this.lookTouch.id = -1;
-    this.autoRun = this.holdBack = this.holdLeft = this.holdRight = false; this.turnImpulse = 0;
+    this.latch = 0; this.turnImpulse = 0;
     document.querySelectorAll('.tb.held').forEach((el) => el.classList.remove('held'));
     this.updateStick();
   }
@@ -121,67 +121,99 @@ export class Input {
     if (!root) return;
     this.stick = document.getElementById('stick'); this.knob = document.getElementById('knob');
     const zone = (this.zone = document.getElementById('touch-zone'));
-    this.autoRun = false; this.holdBack = false; this.holdLeft = false; this.holdRight = false; this.turnImpulse = 0;
-    this.diag = { down: 0, move: 0, up: 0, cancel: 0, tap: 0 };
-    this.lastZoneDown = 0;
+    this.latch = 0; this.turnImpulse = 0;
+    this.label = document.getElementById('stick-label');
+    this.diag = { src: '-', down: 0, move: 0, up: 0, cancel: 0, tap: 0 };
     const enable = () => {
       if (this.touch) return;
       this.touch = true;
       document.body.classList.add('touch');
       this.game.onTouchMode && this.game.onTouchMode();
+      this.updateStick();
     };
     try { if (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches) enable(); } catch (e) { /* old browser */ }
     addEventListener('touchstart', enable, { passive: true, capture: true });
     addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch' || e.pointerType === 'pen') enable(); }, { passive: true, capture: true });
     const now = () => performance.now();
 
-    // drag stick (left side) and look drag (right side)
-    zone.addEventListener('pointerdown', (e) => {
-      if (e.pointerType === 'mouse') return;
-      e.preventDefault();
-      enable();
-      this.diag.down++; this.lastZoneDown = now();
-      const x = e.clientX, y = e.clientY;
-      if (x < innerWidth * 0.45 && this.joy.id < 0) Object.assign(this.joy, { id: e.pointerId, ox: x, oy: y, x, y });
-      else if (this.lookTouch.id < 0) Object.assign(this.lookTouch, { id: e.pointerId, x, y });
-      try { zone.setPointerCapture(e.pointerId); } catch (err) { /* capture is optional */ }
-      this.updateStick();
-    });
-    zone.addEventListener('pointermove', (e) => {
-      if (e.pointerId === this.joy.id) { this.diag.move++; this.joy.x = e.clientX; this.joy.y = e.clientY; this.updateStick(); }
-      else if (e.pointerId === this.lookTouch.id) {
-        this.diag.move++;
-        if (this.enabled) {
-          this.lookX += (e.clientX - this.lookTouch.x) * 0.0052 * this.sens;
-          this.lookY += (e.clientY - this.lookTouch.y) * 0.0052 * this.sens * (this.invertY ? -1 : 1);
-        }
-        this.lookTouch.x = e.clientX; this.lookTouch.y = e.clientY;
-      }
-    });
-    const end = (e) => {
-      if (e.type === 'pointerup') this.diag.up++;
-      if (e.type === 'pointercancel') this.diag.cancel++;
-      if (e.pointerId === this.joy.id) this.joy.id = -1;
-      if (e.pointerId === this.lookTouch.id) this.lookTouch.id = -1;
+    // ---- stick (left side) and look drag (right side) on the touch zone.
+    // Touch events are iOS's own path and drive it; Pointer Events stand in where touch events
+    // never arrive; a plain click is the last resort. Presses that get cancelled still count.
+    let src = null, zoneDownAt = -1e9;
+    const start = (id, x, y) => {
+      this.diag.down++; zoneDownAt = now();
+      const h = this.home();
+      if (x < innerWidth * 0.45 && this.joy.id < 0) {
+        const ring = Math.hypot(x - h.x, y - h.y) < 100;
+        Object.assign(this.joy, { id, ox: ring ? h.x : x, oy: ring ? h.y : y, x, y, t0: now(), ring, moved: false });
+        if (ring) this.latch = 0; // touching the stick takes over from a latched run
+      } else if (this.lookTouch.id < 0) Object.assign(this.lookTouch, { id, x, y });
       this.updateStick();
     };
-    for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) zone.addEventListener(t, end);
-    zone.addEventListener('click', () => { if (now() - this.lastZoneDown > 4000) this.diag.tap++; });
+    const move = (id, x, y) => {
+      const j = this.joy;
+      if (id === j.id) {
+        this.diag.move++;
+        j.x = x; j.y = y;
+        if (!j.moved && Math.hypot(x - j.ox, y - j.oy) > 14 && !j.ring) j.moved = true;
+        this.updateStick();
+      } else if (id === this.lookTouch.id) {
+        this.diag.move++;
+        if (this.enabled) {
+          this.lookX += (x - this.lookTouch.x) * 0.0052 * this.sens;
+          this.lookY += (y - this.lookTouch.y) * 0.0052 * this.sens * (this.invertY ? -1 : 1);
+        }
+        this.lookTouch.x = x; this.lookTouch.y = y;
+      }
+    };
+    const finish = (id, cancelled) => {
+      cancelled ? this.diag.cancel++ : this.diag.up++;
+      const j = this.joy;
+      if (id === j.id) {
+        const quick = now() - j.t0 < 300;
+        if (j.ring && (quick || cancelled)) this.stickTap(j.x - j.ox, j.y - j.oy, !quick);
+        j.id = -1;
+      }
+      if (id === this.lookTouch.id) this.lookTouch.id = -1;
+      this.updateStick();
+    };
+    const clearAll = () => { this.joy.id = -1; this.lookTouch.id = -1; };
+    zone.addEventListener('touchstart', (e) => {
+      e.preventDefault(); enable();
+      if (src !== 'touch') { src = this.diag.src = 'touch'; clearAll(); }
+      for (const t of e.changedTouches) start(t.identifier, t.clientX, t.clientY);
+    }, { passive: false });
+    zone.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (src === 'touch') for (const t of e.changedTouches) move(t.identifier, t.clientX, t.clientY);
+    }, { passive: false });
+    zone.addEventListener('touchend', (e) => { if (src === 'touch') for (const t of e.changedTouches) finish(t.identifier, false); });
+    zone.addEventListener('touchcancel', (e) => { if (src === 'touch') for (const t of e.changedTouches) finish(t.identifier, true); });
+    const pid = (e) => 1e6 + e.pointerId; // never collides with touch identifiers
+    zone.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse' || src === 'touch') return;
+      enable();
+      src = this.diag.src = 'pointer';
+      start(pid(e), e.clientX, e.clientY);
+      try { zone.setPointerCapture(e.pointerId); } catch (err) { /* capture is optional */ }
+    });
+    zone.addEventListener('pointermove', (e) => { if (src === 'pointer') move(pid(e), e.clientX, e.clientY); });
+    zone.addEventListener('pointerup', (e) => { if (src === 'pointer') finish(pid(e), false); });
+    zone.addEventListener('pointercancel', (e) => { if (src === 'pointer') finish(pid(e), true); });
+    zone.addEventListener('click', (e) => {
+      if (now() - zoneDownAt < 1200) return; // the click after a real press: already handled
+      this.diag.tap++;
+      const h = this.home();
+      if (Math.hypot(e.clientX - h.x, e.clientY - h.y) < 100) { enable(); this.stickTap(e.clientX - h.x, e.clientY - h.y, false); }
+    });
     zone.addEventListener('contextmenu', (e) => e.preventDefault());
     // while playing, a finger drag must never scroll or bounce the page
     document.addEventListener('touchmove', (e) => { if (this.enabled && e.cancelable) e.preventDefault(); }, { passive: false });
+    addEventListener('resize', () => this.updateStick());
 
-    // buttons
-    const setRun = (on) => {
-      this.autoRun = on;
-      root.querySelector('[data-btn="fwd"]')?.classList.toggle('held', on);
-    };
+    // ---- action buttons: act on press, with a bare click as fallback
     const tap = (b, el) => {
       if (!this.enabled && b !== 'pause') return;
-      if (b === 'fwd') setRun(!this.autoRun);
-      if (b === 'back') setRun(false);
-      if (b === 'left') this.turnImpulse -= 0.52;
-      if (b === 'right') this.turnImpulse += 0.52;
       if (b === 'jump') { this.jumpPressed = true; }
       if (b === 'crouch') { this.crouchPressed = true; this.crouchToggle = !this.crouchToggle; el.classList.toggle('held', this.crouchToggle); }
       if (b === 'throw') this.throwPressed = true;
@@ -195,33 +227,22 @@ export class Input {
       el.addEventListener('pointerdown', (e) => {
         e.preventDefault(); e.stopPropagation();
         enable();
-        this.diag.down++;
         downAt = now(); held = true; pressed = true;
         el.classList.add('on');
         try { el.setPointerCapture(e.pointerId); } catch (err) { /* optional */ }
-        if (!this.enabled && b !== 'pause') return;
-        // turning and backing up act while held; a short press is a tap (handled on release)
-        if (b === 'left') this.holdLeft = true;
-        else if (b === 'right') this.holdRight = true;
-        else if (b === 'back') { this.holdBack = true; setRun(false); }
-        else { tap(b, el); if (b === 'jump') this.jump = true; }
+        tap(b, el);
+        if (b === 'jump' && this.enabled) this.jump = true;
       });
-      const release = (e) => {
+      const release = () => {
         if (!held) return;
         held = false;
-        if (e.type === 'pointerup') this.diag.up++; else if (e.type === 'pointercancel') this.diag.cancel++;
         el.classList.remove('on');
-        const quick = now() - downAt < 230;
-        if (b === 'left') { this.holdLeft = false; if (quick) tap(b, el); }
-        if (b === 'right') { this.holdRight = false; if (quick) tap(b, el); }
-        if (b === 'back') this.holdBack = false;
         if (b === 'jump') this.jump = false;
       };
       for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(t, release);
-      // last resort: a bare click with no pointer press before it
+      el.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
       el.addEventListener('click', (e) => {
         e.preventDefault(); e.stopPropagation();
-        // the click that follows a real press was already handled by that press
         if (pressed) { pressed = false; if (now() - downAt < 4000) return; }
         this.diag.tap++;
         enable();
@@ -230,14 +251,37 @@ export class Input {
       el.addEventListener('contextmenu', (e) => e.preventDefault());
     });
   }
-  updateStick() {
-    if (!this.stick) return;
-    const j = this.joy;
-    if (j.id < 0) { this.stick.style.opacity = 0; return; }
+
+  // A short tap on the stick, or a hold the browser cut off.
+  //  tap up: keep running (latched) · tap left/right: turn ~30° · tap middle/down: stop
+  //  cut-off hold: keep going the way the stick was pushed
+  stickTap(dx, dy, wasHold) {
+    const l = Math.hypot(dx, dy);
+    if (wasHold) this.latch = -dy > 12 ? 1 : 0;
+    else if (l < 18 || dy > Math.abs(dx)) this.latch = 0;
+    else if (Math.abs(dx) > -dy) this.turnImpulse += Math.sign(dx) * 0.52;
+    else this.latch = 1;
+    this.updateStick();
+  }
+  // Resting place of the stick (client coordinates), bottom-left inside the safe area.
+  home() {
     const r = this.zone.getBoundingClientRect();
-    this.stick.style.opacity = 1;
-    this.stick.style.left = j.ox - r.left + 'px'; this.stick.style.top = j.oy - r.top + 'px';
-    const dx = j.x - j.ox, dy = j.y - j.oy, l = Math.hypot(dx, dy) || 1, k = Math.min(1, 52 / l);
+    return { x: r.left + Math.min(112, r.width * 0.2), y: r.bottom - Math.min(112, r.height * 0.3), r };
+  }
+  updateStick() {
+    if (!this.stick || !this.zone) return;
+    const j = this.joy, h = this.home(), active = j.id >= 0;
+    const ox = active ? j.ox : h.x, oy = active ? j.oy : h.y;
+    let dx = 0, dy = 0;
+    if (active) { dx = j.x - j.ox; dy = j.y - j.oy; } else if (this.latch) dy = -40;
+    const l = Math.hypot(dx, dy) || 1, k = Math.min(1, 52 / l);
+    this.stick.style.opacity = active || this.latch ? 1 : 0.65;
+    this.stick.style.left = ox - h.r.left + 'px'; this.stick.style.top = oy - h.r.top + 'px';
     this.knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
+    this.stick.classList.toggle('latched', !!this.latch && !active);
+    if (this.label) {
+      const t = this.latch && !active ? 'TAP MIDDLE TO STOP' : '';
+      if (this.label.textContent !== t) this.label.textContent = t;
+    }
   }
 }

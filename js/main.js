@@ -13,7 +13,7 @@ import { LEVELS, PALETTES, WRAPS, endlessLevel, dailyLevel } from './config.js';
 import { clamp, damp, smooth, todaySeed } from './util.js';
 
 const HINTS = {
-  move: ['<kbd>W A S D</kbd> run &nbsp;·&nbsp; <kbd>MOUSE</kbd> look &nbsp;·&nbsp; follow the gold light', 'Tap <b>▲</b> to start running and again to stop · <b>◀ ▶</b> turn · or drag on the left to steer'],
+  move: ['<kbd>W A S D</kbd> run &nbsp;·&nbsp; <kbd>MOUSE</kbd> look &nbsp;·&nbsp; follow the gold light', 'Hold the stick to run and steer · tap its top to keep running, its middle to stop'],
   jump: ['<kbd>SPACE</kbd> to leap. Keep <kbd>W</kbd> held into a ledge and you will climb it', '<b>LEAP</b> across the gaps. Push into a ledge to climb it'],
   mantle: ['Fell to the street? Crates and awnings are the way back up to the tiles', 'Fell to the street? Crates and awnings are the way back up'],
   sneak: ['Hold <kbd>SHIFT</kbd> to sneak: silent, and much harder to see', '<b>SNEAK</b> toggles a silent crouch that is much harder to see'],
@@ -226,7 +226,7 @@ class Game {
     const d = this.input.diag, el = document.getElementById('p-diag');
     if (el) {
       el.classList.toggle('hidden', !this.input.touch || !d);
-      if (d) el.textContent = `Touch check: press ${d.down} · drag ${d.move} · lift ${d.up} · cancelled ${d.cancel} · tap ${d.tap}`;
+      if (d) el.textContent = `Touch check (${d.src}): press ${d.down} · drag ${d.move} · lift ${d.up} · cancelled ${d.cancel} · tap ${d.tap}`;
     }
   }
   resume() {
