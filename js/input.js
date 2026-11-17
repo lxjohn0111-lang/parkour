@@ -1,4 +1,6 @@
 // Keyboard + mouse (pointer lock) and touch controls behind one small state object.
+const STICK_R = 56; // joystick travel in CSS px
+
 export class Input {
   constructor(canvas, game) {
     this.canvas = canvas; this.game = game;
@@ -90,12 +92,11 @@ export class Input {
     } else {
       const j = this.joy;
       const dx = j.x - j.ox, dy = j.y - j.oy, l = Math.hypot(dx, dy);
-      if (j.id >= 0 && l > 8) { const m = Math.min(1, (l - 8) / 32); this.moveX = (dx / l) * m; this.moveZ = (-dy / l) * m; }
-      else {
-        // the stick can stay latched forward (see stickTap): keep running hands-free
-        this.moveZ = this.latch;
-        this.moveX = 0;
-      }
+      // analog: 12% dead zone, then a smooth ramp to full speed just before the rim
+      const m = j.id >= 0 && l > 0 ? Math.min(1, Math.max(0, (l / STICK_R - 0.12) / 0.76)) : 0;
+      const e = m * m * (3 - 2 * m) * 0.35 + m * 0.65; // eased, still linear enough to feather
+      this.moveX = m ? (dx / l) * e : 0;
+      this.moveZ = m ? (-dy / l) * e : 0;
       this.crouch = this.crouchToggle;
     }
   }
@@ -106,7 +107,6 @@ export class Input {
   reset() {
     this.keys.clear(); this.jump = false; this.crouchToggle = false; this.endFrame();
     this.joy.id = -1; this.lookTouch.id = -1;
-    this.latch = 0; this.turnImpulse = 0;
     document.querySelectorAll('.tb.held').forEach((el) => el.classList.remove('held'));
     this.updateStick();
   }
@@ -121,8 +121,6 @@ export class Input {
     if (!root) return;
     this.stick = document.getElementById('stick'); this.knob = document.getElementById('knob');
     const zone = (this.zone = document.getElementById('touch-zone'));
-    this.latch = 0; this.turnImpulse = 0;
-    this.label = document.getElementById('stick-label');
     this.diag = { src: '-', down: 0, move: 0, up: 0, cancel: 0, tap: 0 };
     const enable = () => {
       if (this.touch) return;
@@ -142,12 +140,8 @@ export class Input {
     let src = null, zoneDownAt = -1e9;
     const start = (id, x, y) => {
       this.diag.down++; zoneDownAt = now();
-      const h = this.home();
-      if (x < innerWidth * 0.45 && this.joy.id < 0) {
-        const ring = Math.hypot(x - h.x, y - h.y) < 100;
-        Object.assign(this.joy, { id, ox: ring ? h.x : x, oy: ring ? h.y : y, x, y, t0: now(), ring, moved: false });
-        if (ring) this.latch = 0; // touching the stick takes over from a latched run
-      } else if (this.lookTouch.id < 0) Object.assign(this.lookTouch, { id, x, y });
+      if (x < innerWidth * 0.45 && this.joy.id < 0) Object.assign(this.joy, { id, ox: x, oy: y, x, y });
+      else if (this.lookTouch.id < 0) Object.assign(this.lookTouch, { id, x, y });
       this.updateStick();
     };
     const move = (id, x, y) => {
@@ -155,25 +149,22 @@ export class Input {
       if (id === j.id) {
         this.diag.move++;
         j.x = x; j.y = y;
-        if (!j.moved && Math.hypot(x - j.ox, y - j.oy) > 14 && !j.ring) j.moved = true;
+        // dragged past the rim: the base follows the thumb, so reversing direction is instant
+        const dx = x - j.ox, dy = y - j.oy, l = Math.hypot(dx, dy);
+        if (l > STICK_R) { j.ox = x - (dx / l) * STICK_R; j.oy = y - (dy / l) * STICK_R; }
         this.updateStick();
       } else if (id === this.lookTouch.id) {
         this.diag.move++;
         if (this.enabled) {
-          this.lookX += (x - this.lookTouch.x) * 0.0052 * this.sens;
-          this.lookY += (y - this.lookTouch.y) * 0.0052 * this.sens * (this.invertY ? -1 : 1);
+          this.lookX += (x - this.lookTouch.x) * 0.0055 * this.sens;
+          this.lookY += (y - this.lookTouch.y) * 0.0055 * this.sens * (this.invertY ? -1 : 1);
         }
         this.lookTouch.x = x; this.lookTouch.y = y;
       }
     };
     const finish = (id, cancelled) => {
       cancelled ? this.diag.cancel++ : this.diag.up++;
-      const j = this.joy;
-      if (id === j.id) {
-        const quick = now() - j.t0 < 300;
-        if (j.ring && (quick || cancelled)) this.stickTap(j.x - j.ox, j.y - j.oy, !quick);
-        j.id = -1;
-      }
+      if (id === this.joy.id) this.joy.id = -1;
       if (id === this.lookTouch.id) this.lookTouch.id = -1;
       this.updateStick();
     };
@@ -200,12 +191,7 @@ export class Input {
     zone.addEventListener('pointermove', (e) => { if (src === 'pointer') move(pid(e), e.clientX, e.clientY); });
     zone.addEventListener('pointerup', (e) => { if (src === 'pointer') finish(pid(e), false); });
     zone.addEventListener('pointercancel', (e) => { if (src === 'pointer') finish(pid(e), true); });
-    zone.addEventListener('click', (e) => {
-      if (now() - zoneDownAt < 1200) return; // the click after a real press: already handled
-      this.diag.tap++;
-      const h = this.home();
-      if (Math.hypot(e.clientX - h.x, e.clientY - h.y) < 100) { enable(); this.stickTap(e.clientX - h.x, e.clientY - h.y, false); }
-    });
+    zone.addEventListener('click', () => { if (now() - zoneDownAt > 1200) this.diag.tap++; });
     zone.addEventListener('contextmenu', (e) => e.preventDefault());
     // while playing, a finger drag must never scroll or bounce the page
     document.addEventListener('touchmove', (e) => { if (this.enabled && e.cancelable) e.preventDefault(); }, { passive: false });
@@ -252,17 +238,6 @@ export class Input {
     });
   }
 
-  // A short tap on the stick, or a hold the browser cut off.
-  //  tap up: keep running (latched) · tap left/right: turn ~30° · tap middle/down: stop
-  //  cut-off hold: keep going the way the stick was pushed
-  stickTap(dx, dy, wasHold) {
-    const l = Math.hypot(dx, dy);
-    if (wasHold) this.latch = -dy > 12 ? 1 : 0;
-    else if (l < 18 || dy > Math.abs(dx)) this.latch = 0;
-    else if (Math.abs(dx) > -dy) this.turnImpulse += Math.sign(dx) * 0.52;
-    else this.latch = 1;
-    this.updateStick();
-  }
   // Resting place of the stick (client coordinates), bottom-left inside the safe area.
   home() {
     const r = this.zone.getBoundingClientRect();
@@ -272,16 +247,9 @@ export class Input {
     if (!this.stick || !this.zone) return;
     const j = this.joy, h = this.home(), active = j.id >= 0;
     const ox = active ? j.ox : h.x, oy = active ? j.oy : h.y;
-    let dx = 0, dy = 0;
-    if (active) { dx = j.x - j.ox; dy = j.y - j.oy; } else if (this.latch) dy = -40;
-    const l = Math.hypot(dx, dy) || 1, k = Math.min(1, 52 / l);
-    this.stick.style.opacity = active || this.latch ? 1 : 0.65;
-    this.stick.style.left = ox - h.r.left + 'px'; this.stick.style.top = oy - h.r.top + 'px';
-    this.knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
-    this.stick.classList.toggle('latched', !!this.latch && !active);
-    if (this.label) {
-      const t = this.latch && !active ? 'TAP MIDDLE TO STOP' : '';
-      if (this.label.textContent !== t) this.label.textContent = t;
-    }
+    const dx = active ? j.x - j.ox : 0, dy = active ? j.y - j.oy : 0;
+    this.stick.style.opacity = active ? 1 : 0.45;
+    this.stick.style.transform = `translate(${(ox - h.r.left).toFixed(1)}px, ${(oy - h.r.top).toFixed(1)}px)`;
+    this.knob.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
   }
 }

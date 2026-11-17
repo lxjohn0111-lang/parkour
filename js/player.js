@@ -57,20 +57,9 @@ export class Player {
     if (this.frozen) { this.updateCamera(dt, 0, 0); return; }
     // look
     this.yaw -= input.lookX; this.pitch = clamp(this.pitch - input.lookY, -1.5, 1.5);
-    // touch: pushing the stick sideways turns the view, so the game also plays without drag-to-look
-    if (input.touch) {
-      const ax = Math.abs(input.moveX);
-      if (ax > 0.22 && this.state !== 'wallrun') this.yaw -= Math.sign(input.moveX) * ((ax - 0.22) / 0.78) * 2.5 * dt;
-      if (input.lookTouch.id < 0 && this.state !== 'mantle') this.pitch = damp(this.pitch, -0.1, 0.9, dt);
-      if (input.turnImpulse) {
-        const step = Math.sign(input.turnImpulse) * Math.min(Math.abs(input.turnImpulse), 5 * dt);
-        this.yaw -= step; input.turnImpulse -= step;
-        if (Math.abs(input.turnImpulse) < 1e-4) input.turnImpulse = 0;
-      }
-    }
     const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
     const fx = -sy, fz = -cy, rx = cy, rz = -sy;
-    let mx = input.moveX * (input.touch ? 0.35 : 1), mz = input.moveZ;
+    let mx = input.moveX, mz = input.moveZ;
     const ml = Math.hypot(mx, mz);
     if (ml > 1) { mx /= ml; mz /= ml; }
     let wx = fx * mz + rx * mx, wz = fz * mz + rz * mx;

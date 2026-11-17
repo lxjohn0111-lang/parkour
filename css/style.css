@@ -130,9 +130,9 @@ body.touch .tool .key { display: none; }
 #touch { position: fixed; inset: 0; display: none; pointer-events: none; }
 body.touch.playing #touch { display: block; }
 #touch-zone { position: absolute; inset: 0; pointer-events: auto; }
-#stick { position: absolute; width: 0; height: 0; opacity: 0; }
-#stick::before { content: ''; position: absolute; left: -62px; top: -62px; width: 124px; height: 124px; border-radius: 50%; border: 2px solid rgba(243, 231, 207, .5); background: rgba(23, 18, 46, .28); }
-#knob { position: absolute; left: -26px; top: -26px; width: 52px; height: 52px; border-radius: 50%; background: rgba(243, 231, 207, .8); }
+#stick { position: absolute; left: 0; top: 0; width: 0; height: 0; opacity: 0; will-change: transform; transition: opacity .15s; }
+#stick::before { content: ''; position: absolute; left: -64px; top: -64px; width: 128px; height: 128px; border-radius: 50%; border: 2px solid rgba(243, 231, 207, .55); background: rgba(23, 18, 46, .3); }
+#knob { position: absolute; left: -27px; top: -27px; width: 54px; height: 54px; border-radius: 50%; background: rgba(243, 231, 207, .85); box-shadow: 0 2px 6px rgba(0, 0, 0, .3); will-change: transform; }
 .tb { position: absolute; pointer-events: auto; border-radius: 50%; background: rgba(23, 18, 46, .55); border: 2px solid rgba(243, 231, 207, .6); color: var(--paper); font-weight: 700; letter-spacing: .08em; font-size: 13px; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .tb.on { background: rgba(243, 231, 207, .85); color: var(--ink); } .tb.held { border-color: var(--jade); color: var(--jade); }
 .tb.jump { right: 26px; bottom: 30px; width: 92px; height: 92px; font-size: 15px; }
@@ -342,6 +342,3 @@ body.touch #intro .d { font-size: calc(1.2 * var(--u)); }
 .tb { cursor: pointer; }
 .diag { font-size: calc(1.3 * var(--u)); color: var(--dim); letter-spacing: .04em; margin-top: calc(.6 * var(--u)); }
 
-#stick.latched::before { border-color: var(--jade); box-shadow: 0 0 14px rgba(134, 230, 200, .45); }
-#stick.latched #knob { background: var(--jade); }
-#stick-label { position: absolute; left: -80px; top: 68px; width: 160px; text-align: center; font-size: 10px; font-weight: 700; letter-spacing: .18em; color: var(--jade); white-space: nowrap; }
