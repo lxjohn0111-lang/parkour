@@ -219,6 +219,12 @@ class Guard {
           let sx = dx / d, sz = dz / d;
           if (this.sideT > 0) { this.sideT -= dt; const px = -sz * this.side, pz = sx * this.side; sx = sx * 0.3 + px; sz = sz * 0.3 + pz; const l = Math.hypot(sx, sz); sx /= l; sz /= l; }
           mvx = sx; mvz = sz; speed = this.def.kind === 'patrol' ? 6.6 : 7.3;
+          // making no headway (wrong roof, stuck in an alley)? come up somewhere else
+          this.progT = (this.progT || 0) + dt;
+          if (this.progT > 3.5) {
+            if ((this.progD || 1e9) - d < 2.5 && !this.sees && d > 6) A.relocate(this);
+            this.progD = d; this.progT = 0;
+          }
           if (this.barkCd <= 0 && Math.random() < dt * 0.25) this.bark('chase');
         } else if (A.alert === 'search') { this.state = 'search'; this.wait = 4; this.target = { x: tgt.x, z: tgt.z }; }
         break;
@@ -775,24 +781,39 @@ export class Actors {
     }
   }
 
-  reinforce() {
+  // A hidden rooftop spot near the player (never in plain sight), or null.
+  ambushSpot() {
     const game = this.game, pl = game.player, w = game.world;
-    const chasers = this.guards.filter((g) => !g.tower && g.state === 'chase').length;
-    const max = clamp(2 + Math.floor(game.def.sentries / 4), 2, 5);
-    if (chasers >= max) return;
-    // climb up somewhere out of sight near the player, preferably ahead
     for (let tries = 0; tries < 14; tries++) {
       const a = Math.random() * TAU, d = 20 + Math.random() * 14;
       const x = clamp(pl.pos.x + Math.sin(a) * d, -HW + 2, HW - 2), z = clamp(pl.pos.z + Math.cos(a) * d - 6, w.bounds.z0 + 4, w.bounds.z1 - 2);
       const y = w.highest(x, z);
       if (y < 3 || y > 12 || w.isWater(x, z)) continue;
-      if (w.los(x, y + 1.6, z, pl.pos.x, pl.chestY, pl.pos.z) && tries < 10) continue;
-      const g = new Guard(this, { kind: 'sentry', pts: [[x, z]], facing: 0 });
-      g.extra = true; g.state = 'chase'; g.aware = 1;
-      this.guards.push(g);
-      game.audio.whistle();
-      return;
+      if (w.los(x, y + 1.6, z, pl.pos.x, pl.chestY, pl.pos.z)) continue;
+      return { x, y, z };
     }
+    return null;
+  }
+  relocate(g) {
+    const pl = this.game.player;
+    if (this.game.world.los(g.eye.x, g.eye.y, g.eye.z, pl.pos.x, pl.chestY, pl.pos.z)) return;
+    const s = this.ambushSpot();
+    if (!s) return;
+    g.pos.set(s.x, s.y, s.z); g.vel.set(0, 0, 0); g.grounded = true; g.climb = null; g.progD = 1e9;
+    this.game.audio.whistle();
+  }
+
+  reinforce() {
+    const game = this.game, pl = game.player, w = game.world;
+    const chasers = this.guards.filter((g) => !g.tower && g.state === 'chase').length;
+    const max = clamp(2 + Math.floor(game.def.sentries / 4), 2, 5);
+    if (chasers >= max) return;
+    const sp = this.ambushSpot();
+    if (!sp) return;
+    const g = new Guard(this, { kind: 'sentry', pts: [[sp.x, sp.z]], facing: 0 });
+    g.extra = true; g.state = 'chase'; g.aware = 1;
+    this.guards.push(g);
+    game.audio.whistle();
   }
 
   assignSpots(pl) {
