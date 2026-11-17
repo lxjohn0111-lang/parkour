@@ -128,6 +128,7 @@ class Game {
       starMax: 4 + 2 * u('pouch'), smokeMax: 1 + u('smoke'), hookRange: u('hook') ? 18 + 7 * u('hook') : 0,
       magnet: 2.3 + 1.4 * u('charm'), flowBonus: 0.12 + 0.045 * u('wind'), flowDecay: 1 - 0.25 * u('wind'),
     };
+    document.body.classList.toggle('nohook', this.stats.hookRange <= 0);
     const w = WRAPS.find((x) => x.key === Save.data.wrap) || WRAPS[0];
     this.player.setWrapColor(w.color);
   }
@@ -210,6 +211,7 @@ class Game {
     if (state !== 'playing' && state !== 'finale') this.input.unlock();
     this.player.arms.visible = state === 'playing' || state === 'paused' || state === 'failed';
     document.getElementById('kite').classList.toggle('hidden', state !== 'finale');
+    document.getElementById('hud').classList.toggle('cine', state === 'finale');
   }
 
   pause() {

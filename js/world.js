@@ -510,6 +510,15 @@ export class World {
         this.addSolid(x - 0.6, zf - 0.58, x + 0.6, zf + 0.58, 0, T_FLAT, top);
       }
     }
+    // a central crate stair, so a fall in front of the gate is never a dead end
+    {
+      const zf = z1 - 0.5 + 2.05;
+      for (let k = -2; k <= 2; k++) {
+        const n = 3 - Math.abs(k), x = gx + k * 1.2;
+        for (let j = 0; j < n; j++) P.crate(g, x, j * 1.15, zf, 1.15, 1.15, 1.15, pal, R);
+        this.addSolid(x - 0.6, zf - 0.58, x + 0.6, zf + 0.58, 0, T_FLAT, 1.15 * n);
+      }
+    }
     // the kite, and a beacon you can read from the first roof
     const ky = r2.ridgeY;
     this.goal = { x: gx, y: ky, z: cz, r: 2.6 };

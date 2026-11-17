@@ -254,3 +254,7 @@ body.touch .keys { display: none; }
 @media (orientation: portrait) and (pointer: coarse) { #rotate { display: flex; } }
 @media (max-aspect-ratio: 5/4) { #nights-grid, #shop-grid { grid-template-columns: repeat(2, 1fr); } .res-body { grid-template-columns: 1fr; } .res-btns { grid-template-columns: 1fr 1fr; } }
 @media (prefers-reduced-motion: reduce) { * { animation-duration: .01s !important; } }
+
+/* escape glide: only the banner stays on screen */
+#hud.cine > *:not(#banner) { opacity: 0; transition: opacity .4s; }
+body.nohook .tb.hook { display: none; }
