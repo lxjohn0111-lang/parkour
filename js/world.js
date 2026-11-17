@@ -281,7 +281,7 @@ export class World {
       const special = row.gapKind !== 'street';
       nb.path = true; nb.axis = 'x';
       if (nb.kind === 'temple') pb.h = Math.max(pb.h, nb.h - 0.6);
-      else nb.h = special ? clamp(pb.h - R.range(0.2, 2.2), 3.9, 8) : clamp(pb.h + R.range(-2.0, 0.9), 3.9, 8);
+      else nb.h = special ? clamp(pb.h - R.range(0.2, 1.8), 4.2, 8) : clamp(pb.h + R.range(-1.7, 1.7) + (6.1 - pb.h) * 0.3, 4.2, 8.2);
       nb.z1 = next.z1; pb.z0 = row.z0;
       path[i].cross = cross;
       path.push({ b: nb, enter: cross });

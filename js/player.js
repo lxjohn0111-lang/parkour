@@ -230,8 +230,8 @@ export class Player {
       this.flow *= rolling ? 0.9 : 0.55;
       this.shake = Math.min(1, this.shake + 0.5);
     }
-    const dmgAt = rolling ? 23 : 17.5;
-    if (impact > dmgAt) g.damage((impact - dmgAt) * 6.5 + 6, 'fall');
+    const dmgAt = rolling ? 24 : 18.5;
+    if (impact > dmgAt) g.damage((impact - dmgAt) * 5.5 + 5, 'fall');
     this.dipV -= Math.min(7, impact * 0.32);
     g.audio.land(clamp(impact / 16, 0.15, 1), p.y > 1.2);
     if (impact > 6) g.noise(p.x, p.y, p.z, (rolling ? 5 : 4 + impact * 0.55) * g.stats.noise, 0.5);
@@ -447,14 +447,17 @@ export class Player {
     const mk = (side) => {
       const g = new GeoBuilder();
       const sleeve = 0x2a2f55, glove = 0x24202e, wrap = 0xe9dfc8, skin = 0xe8b596;
-      // arm points along -Z, origin near the elbow
-      g.box(-0.05, -0.05, -0.3, 0.05, 0.05, 0.12, sleeve);
-      g.box(-0.056, -0.056, -0.36, 0.056, 0.056, -0.3, wrap);
-      g.box(-0.056, -0.056, -0.25, 0.056, 0.056, -0.21, wrap);
-      g.box(-0.052, -0.03, -0.47, 0.052, 0.03, -0.36, glove);
-      g.box(-0.05, -0.028, -0.56, 0.05, 0.022, -0.47, skin);
-      g.box(-0.05, -0.02, -0.5, 0.05, 0.03, -0.47, glove);
-      g.box(side * -0.085, -0.026, -0.47, side * -0.05, 0.02, -0.39, skin);
+      // arm points along -Z, origin at the elbow
+      g.box(-0.046, -0.046, -0.2, 0.046, 0.046, 0.16, sleeve);
+      g.box(-0.052, -0.052, -0.245, 0.052, 0.052, -0.2, wrap);
+      g.box(-0.05, -0.05, -0.17, 0.05, 0.05, -0.145, wrap);
+      g.box(-0.05, -0.03, -0.345, 0.05, 0.03, -0.245, glove);
+      for (let i = 0; i < 4; i++) {
+        const x = -0.05 + i * 0.026;
+        g.box(x, -0.034, -0.42 + (i === 0 || i === 3 ? 0.012 : 0), x + 0.022, 0.012, -0.345, skin);
+        g.box(x, -0.034, -0.375, x + 0.022, 0.016, -0.345, glove);
+      }
+      g.box(side * -0.082, -0.03, -0.33, side * -0.05, 0.012, -0.26, skin);
       const geo = g.build();
       const m = new THREE.Mesh(geo, this.game.mats.toon);
       m.frustumCulled = false; m.castShadow = false; m.receiveShadow = true;
@@ -463,6 +466,7 @@ export class Player {
     this.armR = mk(1); this.armL = mk(-1);
     this.arms = new THREE.Group();
     this.arms.add(this.armR, this.armL);
+    this.arms.position.set(0, 0, -0.22);
     this.camera.add(this.arms);
     this.armP = { r: new THREE.Vector3(0.3, -0.5, -0.1), l: new THREE.Vector3(-0.3, -0.5, -0.1), rr: new THREE.Vector3(), lr: new THREE.Vector3() };
     this.wrapColor = new THREE.Color(0xe9dfc8);
@@ -488,40 +492,40 @@ export class Player {
   updateArms(dt) {
     const P = this.armP;
     // target pose per hand: position + euler (x pitch up, y yaw, z roll)
-    let rp = [0.27, -0.36, -0.12], rr = [0.25, 0.12, 0], lp = [-0.27, -0.36, -0.12], lr = [0.25, -0.12, 0];
+    let rp = [0.36, -0.62, 0.05], rr = [0.7, 0.3, 0], lp = [-0.36, -0.62, 0.05], lr = [0.7, -0.3, 0];
     const sp = clamp(this.speed / RUN, 0, 1.3);
     const st = this.state;
     if (st === 'mantle' && this.mantle) {
-      const t = Math.min(1, this.mantle.t), push = smooth(0.2, 0.9, t);
-      rp = [0.2, lerp(-0.12, -0.5, push), -0.22]; lp = [-0.2, lerp(-0.12, -0.5, push), -0.22];
-      rr = [lerp(0.5, -0.5, push), 0.25, 0]; lr = [lerp(0.5, -0.5, push), -0.25, 0];
+      const t = Math.min(1, this.mantle.t), push = smooth(0.15, 0.9, t);
+      rp = [0.24, lerp(-0.3, -0.62, push), -0.1]; lp = [-0.24, lerp(-0.3, -0.62, push), -0.1];
+      rr = [lerp(0.35, -0.35, push), 0.3, 0]; lr = [lerp(0.35, -0.35, push), -0.3, 0];
     } else if (st === 'wallrun') {
       const s = this.wallSide;
-      const near = [s * 0.36, -0.14, -0.2], nr = [0.5, -s * 0.5, -s * 0.9];
-      const far = [-s * 0.3, -0.34, -0.1], fr = [0.5, s * 0.2, 0];
+      const near = [s * 0.44, -0.3, -0.02], nr = [0.9, -s * 0.55, -s * 0.5];
+      const far = [-s * 0.36, -0.5, 0.04], fr = [0.9, s * 0.3, 0];
       if (s > 0) { rp = near; rr = nr; lp = far; lr = fr; } else { lp = near; lr = nr; rp = far; rr = fr; }
     } else if (st === 'rope') {
       const sw = Math.sin(this.bob * 0.5) * 0.06;
-      rp = [0.42, -0.22 + sw, -0.05]; rr = [0.15, -0.95, 0.2]; lp = [-0.42, -0.22 - sw, -0.05]; lr = [0.15, 0.95, -0.2];
-      if (Math.abs(this.rope?.slope || 0) > 0.1) { rp = [0.16, 0.12, -0.2]; rr = [1.2, 0.1, 0]; lp = [-0.16, 0.12, -0.2]; lr = [1.2, -0.1, 0]; }
+      rp = [0.46, -0.44 + sw, 0.1]; rr = [0.45, -0.95, 0]; lp = [-0.46, -0.44 - sw, 0.1]; lr = [0.45, 0.95, 0];
+      if (Math.abs(this.rope?.slope || 0) > 0.1) { rp = [0.2, -0.28, 0.02]; rr = [1.35, 0.12, 0]; lp = [-0.2, -0.28, 0.02]; lr = [1.35, -0.12, 0]; }
     } else if (st === 'hook') {
-      rp = [0.2, -0.1, -0.2]; rr = [0.75, 0.15, 0]; lp = [-0.25, -0.3, -0.12]; lr = [0.5, -0.2, 0];
+      rp = [0.24, -0.36, -0.04]; rr = [1.08, 0.2, 0]; lp = [-0.36, -0.56, 0.05]; lr = [0.8, -0.3, 0];
     } else if (this.sliding) {
-      rp = [0.3, -0.3, -0.16]; rr = [0.1, 0.3, 0.3]; lp = [-0.4, -0.42, 0.02]; lr = [-0.5, -0.6, -0.4];
+      rp = [0.38, -0.5, 0.02]; rr = [0.6, 0.5, 0.2]; lp = [-0.46, -0.62, 0.14]; lr = [0.15, -0.9, 0];
     } else if (!this.grounded) {
       const up = clamp(this.vel.y / 8, -1, 1);
-      rp = [0.33, -0.3 + up * 0.06, -0.14]; rr = [0.55 + up * 0.25, 0.3, 0.15]; lp = [-0.33, -0.3 + up * 0.06, -0.14]; lr = [0.55 + up * 0.25, -0.3, -0.15];
+      rp = [0.4, -0.46 + up * 0.05, 0.0]; rr = [0.95 + up * 0.2, 0.12, -0.2]; lp = [-0.4, -0.46 + up * 0.05, 0.0]; lr = [0.95 + up * 0.2, -0.12, 0.2];
     } else if (this.crouch) {
-      rp = [0.24, -0.33, -0.14]; rr = [0.3, 0.3, 0]; lp = [-0.24, -0.33, -0.14]; lr = [0.3, -0.3, 0];
+      rp = [0.3, -0.52, 0.0]; rr = [0.9, 0.45, 0]; lp = [-0.3, -0.52, 0.0]; lr = [0.9, -0.45, 0];
     } else if (sp > 0.2) {
       // sprint pump: hands alternate up into view
       const a = Math.sin(this.bob), k = sp;
-      rp = [0.25, -0.37 + Math.max(0, a) * 0.13 * k, -0.1 - a * 0.12 * k]; rr = [0.35 + a * 0.5 * k, 0.15, 0];
-      lp = [-0.25, -0.37 + Math.max(0, -a) * 0.13 * k, -0.1 + a * 0.12 * k]; lr = [0.35 - a * 0.5 * k, -0.15, 0];
+      rp = [0.35, -0.58 + Math.max(0, a) * 0.13 * k, 0.05 - a * 0.1 * k]; rr = [0.72 + a * 0.42 * k, 0.3, 0];
+      lp = [-0.35, -0.58 + Math.max(0, -a) * 0.13 * k, 0.05 + a * 0.1 * k]; lr = [0.72 - a * 0.42 * k, -0.3, 0];
     }
     if (this.throwT > 0) {
       const t = 1 - this.throwT / 0.3;
-      rp = [0.2 - t * 0.25, -0.16 - t * 0.1, -0.2 - Math.sin(t * Math.PI) * 0.15]; rr = [0.4 - t * 0.5, 0.5 + t * 0.9, 0.4];
+      rp = [0.3 - t * 0.2, -0.36 - t * 0.12, -0.05 - Math.sin(t * Math.PI) * 0.12]; rr = [1.1 - t * 0.9, 0.5 + t * 0.7, 0.3];
     }
     const k = st === 'mantle' ? 22 : 13;
     P.r.set(damp(P.r.x, rp[0], k, dt), damp(P.r.y, rp[1], k, dt), damp(P.r.z, rp[2], k, dt));
