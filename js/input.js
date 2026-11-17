@@ -91,7 +91,11 @@ export class Input {
       const j = this.joy;
       const dx = j.x - j.ox, dy = j.y - j.oy, l = Math.hypot(dx, dy);
       if (j.id >= 0 && l > 8) { const m = Math.min(1, (l - 8) / 32); this.moveX = (dx / l) * m; this.moveZ = (-dy / l) * m; }
-      else { this.moveX = 0; this.moveZ = 0; }
+      else {
+        // run / turn buttons: a tap on RUN keeps you running until it is tapped again
+        this.moveZ = this.holdBack ? -1 : this.autoRun ? 1 : 0;
+        this.moveX = (this.holdRight ? 1 : 0) - (this.holdLeft ? 1 : 0);
+      }
       this.crouch = this.crouchToggle;
     }
   }
@@ -102,46 +106,51 @@ export class Input {
   reset() {
     this.keys.clear(); this.jump = false; this.crouchToggle = false; this.endFrame();
     this.joy.id = -1; this.lookTouch.id = -1;
+    this.autoRun = this.holdBack = this.holdLeft = this.holdRight = false; this.turnImpulse = 0;
     document.querySelectorAll('.tb.held').forEach((el) => el.classList.remove('held'));
     this.updateStick();
   }
 
   // ------------------------------------------------------------------ touch
+  // Touch input is layered, because some in-app web views take the finger away from the page:
+  //  1. Pointer Events (press, drag, lift) for the drag stick, look drag and buttons;
+  //  2. a press that gets cancelled still counts as a tap;
+  //  3. a plain click (all some views deliver) triggers the same tap action.
   setupTouch() {
     const root = document.getElementById('touch');
     if (!root) return;
     this.stick = document.getElementById('stick'); this.knob = document.getElementById('knob');
     const zone = (this.zone = document.getElementById('touch-zone'));
+    this.autoRun = false; this.holdBack = false; this.holdLeft = false; this.holdRight = false; this.turnImpulse = 0;
+    this.diag = { down: 0, move: 0, up: 0, cancel: 0, tap: 0 };
+    this.lastZoneDown = 0;
     const enable = () => {
       if (this.touch) return;
       this.touch = true;
       document.body.classList.add('touch');
       this.game.onTouchMode && this.game.onTouchMode();
     };
-    // phones and tablets switch to touch controls up front; anything else on its first finger
     try { if (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches) enable(); } catch (e) { /* old browser */ }
     addEventListener('touchstart', enable, { passive: true, capture: true });
     addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch' || e.pointerType === 'pen') enable(); }, { passive: true, capture: true });
+    const now = () => performance.now();
 
-    // Pointer Events: one id per finger, delivered the same way in browsers and in-app web views.
+    // drag stick (left side) and look drag (right side)
     zone.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse') return;
       e.preventDefault();
       enable();
-      const x = e.clientX, y = e.clientY, h = this.home();
-      if (x < innerWidth * 0.45 && this.joy.id < 0) {
-        // pressing on the fixed stick gives a direction at once, no drag needed (some in-app
-        // web views hand finger drags to the app instead of the page); elsewhere it floats
-        if (Math.hypot(x - h.x, y - h.y) < 100) Object.assign(this.joy, { id: e.pointerId, ox: h.x, oy: h.y, x, y });
-        else Object.assign(this.joy, { id: e.pointerId, ox: x, oy: y, x, y });
-      }
+      this.diag.down++; this.lastZoneDown = now();
+      const x = e.clientX, y = e.clientY;
+      if (x < innerWidth * 0.45 && this.joy.id < 0) Object.assign(this.joy, { id: e.pointerId, ox: x, oy: y, x, y });
       else if (this.lookTouch.id < 0) Object.assign(this.lookTouch, { id: e.pointerId, x, y });
       try { zone.setPointerCapture(e.pointerId); } catch (err) { /* capture is optional */ }
       this.updateStick();
     });
     zone.addEventListener('pointermove', (e) => {
-      if (e.pointerId === this.joy.id) { this.joy.x = e.clientX; this.joy.y = e.clientY; this.updateStick(); }
+      if (e.pointerId === this.joy.id) { this.diag.move++; this.joy.x = e.clientX; this.joy.y = e.clientY; this.updateStick(); }
       else if (e.pointerId === this.lookTouch.id) {
+        this.diag.move++;
         if (this.enabled) {
           this.lookX += (e.clientX - this.lookTouch.x) * 0.0052 * this.sens;
           this.lookY += (e.clientY - this.lookTouch.y) * 0.0052 * this.sens * (this.invertY ? -1 : 1);
@@ -150,51 +159,85 @@ export class Input {
       }
     });
     const end = (e) => {
+      if (e.type === 'pointerup') this.diag.up++;
+      if (e.type === 'pointercancel') this.diag.cancel++;
       if (e.pointerId === this.joy.id) this.joy.id = -1;
       if (e.pointerId === this.lookTouch.id) this.lookTouch.id = -1;
       this.updateStick();
     };
     for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) zone.addEventListener(t, end);
+    zone.addEventListener('click', () => { if (now() - this.lastZoneDown > 4000) this.diag.tap++; });
+    zone.addEventListener('contextmenu', (e) => e.preventDefault());
     // while playing, a finger drag must never scroll or bounce the page
     document.addEventListener('touchmove', (e) => { if (this.enabled && e.cancelable) e.preventDefault(); }, { passive: false });
-    addEventListener('resize', () => this.updateStick());
-    // no long-press menus, text selection or double-tap zoom while playing
-    const block = (e) => e.preventDefault();
-    zone.addEventListener('touchstart', block, { passive: false });
-    zone.addEventListener('contextmenu', block);
+
+    // buttons
+    const setRun = (on) => {
+      this.autoRun = on;
+      root.querySelector('[data-btn="fwd"]')?.classList.toggle('held', on);
+    };
+    const tap = (b, el) => {
+      if (!this.enabled && b !== 'pause') return;
+      if (b === 'fwd') setRun(!this.autoRun);
+      if (b === 'back') setRun(false);
+      if (b === 'left') this.turnImpulse -= 0.52;
+      if (b === 'right') this.turnImpulse += 0.52;
+      if (b === 'jump') { this.jumpPressed = true; }
+      if (b === 'crouch') { this.crouchPressed = true; this.crouchToggle = !this.crouchToggle; el.classList.toggle('held', this.crouchToggle); }
+      if (b === 'throw') this.throwPressed = true;
+      if (b === 'hook') this.hookPressed = true;
+      if (b === 'smoke') this.smokePressed = true;
+      if (b === 'pause') this.game.onPauseKey();
+    };
     root.querySelectorAll('[data-btn]').forEach((el) => {
       const b = el.dataset.btn;
+      let downAt = 0, held = false, pressed = false;
       el.addEventListener('pointerdown', (e) => {
         e.preventDefault(); e.stopPropagation();
         enable();
+        this.diag.down++;
+        downAt = now(); held = true; pressed = true;
         el.classList.add('on');
         try { el.setPointerCapture(e.pointerId); } catch (err) { /* optional */ }
         if (!this.enabled && b !== 'pause') return;
-        if (b === 'jump') { this.jumpPressed = true; this.jump = true; }
-        if (b === 'crouch') { this.crouchPressed = true; this.crouchToggle = !this.crouchToggle; el.classList.toggle('held', this.crouchToggle); }
-        if (b === 'throw') this.throwPressed = true;
-        if (b === 'hook') this.hookPressed = true;
-        if (b === 'smoke') this.smokePressed = true;
-        if (b === 'pause') this.game.onPauseKey();
+        // turning and backing up act while held; a short press is a tap (handled on release)
+        if (b === 'left') this.holdLeft = true;
+        else if (b === 'right') this.holdRight = true;
+        else if (b === 'back') { this.holdBack = true; setRun(false); }
+        else { tap(b, el); if (b === 'jump') this.jump = true; }
       });
-      const up = () => { el.classList.remove('on'); if (b === 'jump') this.jump = false; };
-      for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(t, up);
-      el.addEventListener('touchstart', block, { passive: false });
-      el.addEventListener('contextmenu', block);
+      const release = (e) => {
+        if (!held) return;
+        held = false;
+        if (e.type === 'pointerup') this.diag.up++; else if (e.type === 'pointercancel') this.diag.cancel++;
+        el.classList.remove('on');
+        const quick = now() - downAt < 230;
+        if (b === 'left') { this.holdLeft = false; if (quick) tap(b, el); }
+        if (b === 'right') { this.holdRight = false; if (quick) tap(b, el); }
+        if (b === 'back') this.holdBack = false;
+        if (b === 'jump') this.jump = false;
+      };
+      for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(t, release);
+      // last resort: a bare click with no pointer press before it
+      el.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        // the click that follows a real press was already handled by that press
+        if (pressed) { pressed = false; if (now() - downAt < 4000) return; }
+        this.diag.tap++;
+        enable();
+        tap(b, el);
+      });
+      el.addEventListener('contextmenu', (e) => e.preventDefault());
     });
-  }
-  // Resting place of the stick (client coordinates), bottom-left inside the safe area.
-  home() {
-    const r = this.zone.getBoundingClientRect();
-    return { x: r.left + Math.min(112, r.width * 0.2), y: r.bottom - Math.min(112, r.height * 0.3), r };
   }
   updateStick() {
     if (!this.stick) return;
-    const j = this.joy, h = this.home(), active = j.id >= 0;
-    const ox = active ? j.ox : h.x, oy = active ? j.oy : h.y;
-    this.stick.style.opacity = active ? 1 : 0.6;
-    this.stick.style.left = ox - h.r.left + 'px'; this.stick.style.top = oy - h.r.top + 'px';
-    const dx = active ? j.x - j.ox : 0, dy = active ? j.y - j.oy : 0, l = Math.hypot(dx, dy) || 1, k = Math.min(1, 52 / l);
+    const j = this.joy;
+    if (j.id < 0) { this.stick.style.opacity = 0; return; }
+    const r = this.zone.getBoundingClientRect();
+    this.stick.style.opacity = 1;
+    this.stick.style.left = j.ox - r.left + 'px'; this.stick.style.top = j.oy - r.top + 'px';
+    const dx = j.x - j.ox, dy = j.y - j.oy, l = Math.hypot(dx, dy) || 1, k = Math.min(1, 52 / l);
     this.knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
   }
 }

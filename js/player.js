@@ -62,6 +62,11 @@ export class Player {
       const ax = Math.abs(input.moveX);
       if (ax > 0.22 && this.state !== 'wallrun') this.yaw -= Math.sign(input.moveX) * ((ax - 0.22) / 0.78) * 2.5 * dt;
       if (input.lookTouch.id < 0 && this.state !== 'mantle') this.pitch = damp(this.pitch, -0.1, 0.9, dt);
+      if (input.turnImpulse) {
+        const step = Math.sign(input.turnImpulse) * Math.min(Math.abs(input.turnImpulse), 5 * dt);
+        this.yaw -= step; input.turnImpulse -= step;
+        if (Math.abs(input.turnImpulse) < 1e-4) input.turnImpulse = 0;
+      }
     }
     const sy = Math.sin(this.yaw), cy = Math.cos(this.yaw);
     const fx = -sy, fz = -cy, rx = cy, rz = -sy;

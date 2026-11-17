@@ -338,3 +338,20 @@ body.touch #intro .d { font-size: calc(1.2 * var(--u)); }
   body.touch #pops { top: 47%; }
   body.touch #subs { bottom: calc(256px + env(safe-area-inset-bottom, 0px)); max-width: 84vw; }
 }
+
+/* touch movement pad: RUN toggles, arrows turn, down stops */
+.tb.dp { width: 60px; height: 60px; border-radius: 14px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; font-size: 10px; letter-spacing: .14em; cursor: pointer; }
+.tb.dp i { display: block; width: 20px; height: 17px; background: currentColor; clip-path: polygon(50% 0, 100% 100%, 0 100%); pointer-events: none; }
+.tb.dp span { pointer-events: none; }
+.tb.fwd { left: 78px; bottom: 82px; }
+.tb.left { left: 12px; bottom: 16px; } .tb.left i { rotate: -90deg; }
+.tb.back { left: 78px; bottom: 16px; } .tb.back i { rotate: 180deg; }
+.tb.right { left: 144px; bottom: 16px; } .tb.right i { rotate: 90deg; }
+.tb.fwd.held { background: var(--jade); border-color: var(--paper); color: var(--ink); }
+.tb { cursor: pointer; }
+.diag { font-size: calc(1.3 * var(--u)); color: var(--dim); letter-spacing: .04em; margin-top: calc(.6 * var(--u)); }
+@media (orientation: portrait) {
+  .tb.dp { width: 54px; height: 54px; }
+  .tb.fwd { left: 66px; bottom: 76px; }
+  .tb.left { left: 8px; } .tb.back { left: 66px; } .tb.right { left: 124px; }
+}
