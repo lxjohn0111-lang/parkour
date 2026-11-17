@@ -13,7 +13,7 @@ import { LEVELS, PALETTES, WRAPS, endlessLevel, dailyLevel } from './config.js';
 import { clamp, damp, smooth, todaySeed } from './util.js';
 
 const HINTS = {
-  move: ['<kbd>W A S D</kbd> run &nbsp;·&nbsp; <kbd>MOUSE</kbd> look &nbsp;·&nbsp; follow the gold light', 'Left thumb runs · right thumb looks · follow the gold light'],
+  move: ['<kbd>W A S D</kbd> run &nbsp;·&nbsp; <kbd>MOUSE</kbd> look &nbsp;·&nbsp; follow the gold light', 'Hold the stick to run, push it sideways to turn · drag the right side to look'],
   jump: ['<kbd>SPACE</kbd> to leap. Keep <kbd>W</kbd> held into a ledge and you will climb it', '<b>LEAP</b> across the gaps. Push into a ledge to climb it'],
   mantle: ['Fell to the street? Crates and awnings are the way back up to the tiles', 'Fell to the street? Crates and awnings are the way back up'],
   sneak: ['Hold <kbd>SHIFT</kbd> to sneak: silent, and much harder to see', '<b>SNEAK</b> toggles a silent crouch that is much harder to see'],
@@ -180,7 +180,7 @@ class Game {
     this.player.style = 0;
     const touch = this.input.touch ? 1 : 0;
     this.hintQ = (this.def.hints || []).map((k) => HINTS[k][touch]);
-    this.hintT = 2.2;
+    this.hintT = 5.6; // after the night's title card
   }
 
   async startRun(def, withAd = false) {
@@ -202,7 +202,6 @@ class Game {
     this.ui.intro(this.def, this.pal);
     this.ui.set('obj-title', this.def.endless || this.def.daily ? this.def.name.toUpperCase() : `NIGHT ${this.def.id} · ${this.pal.name.toUpperCase()}`);
     this.ui.set('obj-text', 'Reach the kite');
-    if (this.input.touch && innerHeight > innerWidth) this.ui.toast('Turn your phone sideways for a wider view');
     Save.data.totals.runs++; Save.save();
     this.fadeTarget = 0;
     this.busy = false;

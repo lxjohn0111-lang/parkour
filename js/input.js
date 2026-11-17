@@ -89,8 +89,8 @@ export class Input {
       this.crouch = k.has('ShiftLeft') || k.has('ShiftRight') || this.crouchToggle;
     } else {
       const j = this.joy;
-      const dx = j.x - j.ox, dy = j.y - j.oy, l = Math.hypot(dx, dy), max = 52;
-      if (j.id >= 0 && l > 6) { this.moveX = (dx / l) * Math.min(1, l / max); this.moveZ = (-dy / l) * Math.min(1, l / max); }
+      const dx = j.x - j.ox, dy = j.y - j.oy, l = Math.hypot(dx, dy);
+      if (j.id >= 0 && l > 8) { const m = Math.min(1, (l - 8) / 32); this.moveX = (dx / l) * m; this.moveZ = (-dy / l) * m; }
       else { this.moveX = 0; this.moveZ = 0; }
       this.crouch = this.crouchToggle;
     }
@@ -111,7 +111,7 @@ export class Input {
     const root = document.getElementById('touch');
     if (!root) return;
     this.stick = document.getElementById('stick'); this.knob = document.getElementById('knob');
-    const zone = document.getElementById('touch-zone');
+    const zone = (this.zone = document.getElementById('touch-zone'));
     const enable = () => {
       if (this.touch) return;
       this.touch = true;
@@ -128,8 +128,13 @@ export class Input {
       if (e.pointerType === 'mouse') return;
       e.preventDefault();
       enable();
-      const x = e.clientX, y = e.clientY;
-      if (x < innerWidth * 0.45 && this.joy.id < 0) Object.assign(this.joy, { id: e.pointerId, ox: x, oy: y, x, y });
+      const x = e.clientX, y = e.clientY, h = this.home();
+      if (x < innerWidth * 0.45 && this.joy.id < 0) {
+        // pressing on the fixed stick gives a direction at once, no drag needed (some in-app
+        // web views hand finger drags to the app instead of the page); elsewhere it floats
+        if (Math.hypot(x - h.x, y - h.y) < 100) Object.assign(this.joy, { id: e.pointerId, ox: h.x, oy: h.y, x, y });
+        else Object.assign(this.joy, { id: e.pointerId, ox: x, oy: y, x, y });
+      }
       else if (this.lookTouch.id < 0) Object.assign(this.lookTouch, { id: e.pointerId, x, y });
       try { zone.setPointerCapture(e.pointerId); } catch (err) { /* capture is optional */ }
       this.updateStick();
@@ -150,6 +155,9 @@ export class Input {
       this.updateStick();
     };
     for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) zone.addEventListener(t, end);
+    // while playing, a finger drag must never scroll or bounce the page
+    document.addEventListener('touchmove', (e) => { if (this.enabled && e.cancelable) e.preventDefault(); }, { passive: false });
+    addEventListener('resize', () => this.updateStick());
     // no long-press menus, text selection or double-tap zoom while playing
     const block = (e) => e.preventDefault();
     zone.addEventListener('touchstart', block, { passive: false });
@@ -175,13 +183,18 @@ export class Input {
       el.addEventListener('contextmenu', block);
     });
   }
+  // Resting place of the stick (client coordinates), bottom-left inside the safe area.
+  home() {
+    const r = this.zone.getBoundingClientRect();
+    return { x: r.left + Math.min(112, r.width * 0.2), y: r.bottom - Math.min(112, r.height * 0.3), r };
+  }
   updateStick() {
     if (!this.stick) return;
-    const j = this.joy;
-    if (j.id < 0) { this.stick.style.opacity = 0; return; }
-    this.stick.style.opacity = 1;
-    this.stick.style.left = j.ox + 'px'; this.stick.style.top = j.oy + 'px';
-    const dx = j.x - j.ox, dy = j.y - j.oy, l = Math.hypot(dx, dy) || 1, k = Math.min(1, 52 / l);
+    const j = this.joy, h = this.home(), active = j.id >= 0;
+    const ox = active ? j.ox : h.x, oy = active ? j.oy : h.y;
+    this.stick.style.opacity = active ? 1 : 0.6;
+    this.stick.style.left = ox - h.r.left + 'px'; this.stick.style.top = oy - h.r.top + 'px';
+    const dx = active ? j.x - j.ox : 0, dy = active ? j.y - j.oy : 0, l = Math.hypot(dx, dy) || 1, k = Math.min(1, 52 / l);
     this.knob.style.transform = `translate(${dx * k}px, ${dy * k}px)`;
   }
 }

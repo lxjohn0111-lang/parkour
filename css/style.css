@@ -272,8 +272,8 @@ body.touch #hud .br { bottom: auto; top: calc(calc(11 * var(--u)) + env(safe-are
 .title { margin-left: calc(7vw + env(safe-area-inset-left, 0px)); }
 
 /* phones and tablets: a bigger minimum UI unit */
-@media (pointer: coarse) { :root { --u: max(1vh, 7.6px); } }
-body.touch { --u: max(1vh, 7.6px); }
+@media (pointer: coarse) { :root { --u: max(1vh, 6.6px); } }
+body.touch { --u: max(1vh, 6.6px); }
 #touch-zone { touch-action: none; }
 
 /* short screens (landscape phones, small embeds): menus scroll instead of clipping */
@@ -314,4 +314,27 @@ body.touch { --u: max(1vh, 7.6px); }
   .logo h2 { font-size: 3.1vw; letter-spacing: .42em; }
   .tb.pause { right: auto; left: 14px; top: calc(10 * var(--u)); margin: 0; }
   #toast { bottom: auto; top: 24%; width: max-content; max-width: 86vw; text-align: center; }
+}
+
+/* touch: stop iOS page bounce, and give every text its own zone so nothing overlaps */
+html, body { overscroll-behavior: none; }
+body { position: fixed; inset: 0; }
+body.touch #intro { left: 50%; right: auto; bottom: auto; top: calc(12 * var(--u) + env(safe-area-inset-top, 0px)); transform: translateX(-50%); width: min(78vw, calc(64 * var(--u))); max-width: none; text-align: center; }
+body.touch #intro .jp { font-size: calc(4.4 * var(--u)); }
+body.touch #intro .t { font-size: calc(2.6 * var(--u)); margin-top: calc(.8 * var(--u)); }
+body.touch #intro .x { font-size: calc(1.6 * var(--u)); max-width: none; }
+body.touch #hint { bottom: auto; top: calc(12 * var(--u) + env(safe-area-inset-top, 0px)); max-width: 60vw; font-size: calc(1.6 * var(--u)); }
+body.touch #banner { top: 38%; }
+body.touch #subs { bottom: calc(2.5 * var(--u) + env(safe-area-inset-bottom, 0px)); max-width: 44vw; white-space: normal; }
+body.touch #subs .jp { font-size: calc(2 * var(--u)); }
+body.touch #pops { right: auto; left: calc(2.2 * var(--u) + env(safe-area-inset-left, 0px)); top: calc(10 * var(--u) + env(safe-area-inset-top, 0px)); align-items: flex-start; }
+body.touch .pop { font-size: calc(1.4 * var(--u)); }
+body.touch .pop:nth-last-child(n+4) { display: none; }
+body.touch #toast { bottom: auto; top: 30%; }
+body.touch #intro .d { font-size: calc(1.2 * var(--u)); }
+@media (orientation: portrait) {
+  body.touch #hint, body.touch #intro { top: calc(19 * var(--u) + env(safe-area-inset-top, 0px)); }
+  body.touch #hint { max-width: 84vw; }
+  body.touch #pops { top: 47%; }
+  body.touch #subs { bottom: calc(256px + env(safe-area-inset-bottom, 0px)); max-width: 84vw; }
 }
