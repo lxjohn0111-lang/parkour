@@ -11,6 +11,7 @@ import { SDK } from './sdk.js';
 import { Save } from './save.js';
 import { LEVELS, PALETTES, WRAPS, endlessLevel, dailyLevel } from './config.js';
 import { clamp, damp, smooth, todaySeed } from './util.js';
+import { Diag } from './diag.js';
 
 const HINTS = {
   move: ['<kbd>W A S D</kbd> run &nbsp;·&nbsp; <kbd>MOUSE</kbd> look &nbsp;·&nbsp; follow the gold light', 'Left thumb: move · right thumb: drag to look around'],
@@ -41,6 +42,7 @@ class Game {
     this.hookTarget = null; this.hookScanT = 0; this.hintQ = []; this.hintT = 0; this.coinStreak = 0; this.coinT = 0;
     this.fxHurt = 0; this.fxFlash = 0; this.fade = 1; this.fadeTarget = 0; this.fxHidden = 0; this.sat = 1;
     this.endlessDepth = 1; this.adCount = 0;
+    this.diag = new Diag(); this.diag.game = this; this.diagT = 0;
   }
 
   async boot() {
@@ -221,12 +223,16 @@ class Game {
 
   pause() {
     if (this.state !== 'playing') return;
+    if (this.input.touch) this.diag.flush(this);
     this.set('paused');
     this.ui.show('pause');
-    const d = this.input.diag, el = document.getElementById('p-diag');
+    const el = document.getElementById('p-diag'), tc = this.input.tc;
     if (el) {
-      el.classList.toggle('hidden', !this.input.touch || !d);
-      if (d) el.textContent = `Touch check (${d.src}): press ${d.down} · drag ${d.move} · lift ${d.up} · cancelled ${d.cancel} · tap ${d.tap}`;
+      el.classList.toggle('hidden', !this.input.touch || !tc);
+      if (tc) {
+        const c = this.diag.counts, last = tc.presses.slice(-3).map((q) => `${q.side}${q.ms}ms/${q.moves}mv/${q.end}`).join(' ');
+        el.textContent = `Touch check: start ${c['pointerdown:touch'] || c.touchstart || 0} · drag ${c['pointermove:touch'] || c.touchmove || 0} · end ${c['pointerup:touch'] || c.touchend || 0} · cancelled ${c['pointercancel:touch'] || c.touchcancel || 0} · ${last}`;
+      }
     }
   }
   resume() {
@@ -496,6 +502,16 @@ class Game {
     if (!r.started && (inp.moveX || inp.moveZ || inp.jumpPressed)) r.started = true;
     if (r.started && !this.over) r.time += dt;
     this.invuln = Math.max(0, this.invuln - dt); this.coinT -= dt;
+    // diagnostics (touch devices only): a few samples while the stick is held, a save now and then
+    if (this.input.touch) {
+      this.diagT += dt;
+      const tc = this.input.tc;
+      if (tc && tc.stick && this.diagT > 0.5) {
+        this.diagT = 0;
+        this.diag.sample({ t: +this.run.time.toFixed(1), mz: +inp.moveZ.toFixed(2), mx: +inp.moveX.toFixed(2), v: +p.speed.toFixed(1), st: p.state });
+      }
+      if (this.run.time > 12 && this.diag.writes < 2) this.diag.flush(this);
+    }
     // tools
     if (inp.throwPressed && !this.over) {
       if (this.stars > 0) { this.stars--; p.throwT = 0.3; p.camera.updateMatrixWorld(); A.throwShuriken(p.camera); this.ui.flashTool('tool-star'); }

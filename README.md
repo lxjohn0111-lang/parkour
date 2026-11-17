@@ -74,6 +74,8 @@ Every SDK call is guarded, so the game also runs where the SDK is missing or dis
 | `js/ui.js`, `css/style.css` | HUD, menus, hideout, results |
 | `js/config.js` | Palettes, nights, upgrades, guard barks |
 | `js/sdk.js`, `js/save.js`, `js/input.js` | CrazyGames SDK wrapper, saves, input |
+| `js/touch.js` | Touch joystick (left half) and drag-to-look (right half) |
+| `js/diag.js` | Touch diagnostics saved to the artifact's database; inactive outside claude.ai |
 
 ## Credits
 
