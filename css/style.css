@@ -3,6 +3,7 @@
 @font-face { font-family: 'Brush'; src: url('../fonts/brush-subset.woff2') format('woff2'); font-display: swap; }
 
 :root {
+  color-scheme: dark;
   --ink: #17122e; --ink2: #241b45; --line: rgba(243, 231, 207, .16);
   --paper: #f3e7cf; --dim: rgba(243, 231, 207, .62);
   --red: #d8412f; --gold: #f2b53a; --jade: #86e6c8;
@@ -258,3 +259,13 @@ body.touch .keys { display: none; }
 /* escape glide: only the banner stays on screen */
 #hud.cine > *:not(#banner) { opacity: 0; transition: opacity .4s; }
 body.nohook .tb.hook { display: none; }
+
+/* keep HUD corners and touch controls clear of notches and system bars */
+#hud .tl { left: calc(2.2vh + env(safe-area-inset-left, 0px)); top: calc(2.2vh + env(safe-area-inset-top, 0px)); }
+#hud .tc { top: calc(1.8vh + env(safe-area-inset-top, 0px)); }
+#hud .tr { right: calc(2.4vh + env(safe-area-inset-right, 0px)); top: calc(2.2vh + env(safe-area-inset-top, 0px)); }
+#hud .br { right: calc(2.4vh + env(safe-area-inset-right, 0px)); bottom: calc(2.4vh + env(safe-area-inset-bottom, 0px)); }
+body.touch #hud .br { bottom: auto; top: calc(11vh + env(safe-area-inset-top, 0px)); }
+#touch { inset: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+.wallet { right: calc(3vh + env(safe-area-inset-right, 0px)); top: calc(2.6vh + env(safe-area-inset-top, 0px)); }
+.title { margin-left: calc(7vw + env(safe-area-inset-left, 0px)); }

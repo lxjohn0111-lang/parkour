@@ -83,6 +83,11 @@ class Game {
     this.refreshStats();
     this.ui.syncSettings();
 
+    if (!SDK.sdk) {
+      // outside CrazyGames there are no ads: the reward buttons just grant the reward
+      document.querySelector('#f-revive small').textContent = 'Once per run';
+      document.querySelector('#r-double small').textContent = 'Bonus';
+    }
     SDK.onAdState = (on) => { this.audio.setDucked(on); };
     SDK.onSettings(() => this.audio.setMuted(SDK.muted));
     this.audio.setMuted(SDK.muted);
@@ -224,6 +229,9 @@ class Game {
     this.ui.hideScreens();
     this.input.reset();
     this.set('playing');
+  }
+  onLockFailed() {
+    if (this.state === 'playing') this.ui.hint('Hold the left mouse button and drag to look &nbsp;·&nbsp; <kbd>F</kbd> throws a shuriken', 9);
   }
   onPointerUnlock() { if (this.state === 'playing' && !this.input.touch) this.pause(); }
   onPauseKey() {

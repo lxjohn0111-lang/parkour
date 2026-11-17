@@ -12,6 +12,7 @@ export class Input {
     this.joy = { id: -1, ox: 0, oy: 0, x: 0, y: 0 };
     this.lookTouch = { id: -1, x: 0, y: 0 };
     this._lockAt = 0;
+    this.lockFailed = false;
 
     addEventListener('keydown', (e) => this.onKey(e, true));
     addEventListener('keyup', (e) => this.onKey(e, false));
@@ -20,15 +21,18 @@ export class Input {
       this.locked = document.pointerLockElement === canvas;
       if (!this.locked) { this._lockAt = performance.now(); game.onPointerUnlock(); }
     });
-    document.addEventListener('pointerlockerror', () => { this.locked = false; });
+    document.addEventListener('pointerlockerror', () => this.lockFail());
     canvas.addEventListener('mousedown', (e) => {
       if (this.touch) return;
-      if (!this.locked) { if (this.enabled) this.lock(); return; }
-      if (e.button === 0) this.throwPressed = true;
+      if (!this.locked && !this.lockFailed) { if (this.enabled) this.lock(); return; }
+      if (!this.enabled) return;
+      // without pointer lock the left button drags the view, so only F throws
+      if (e.button === 0 && this.locked) this.throwPressed = true;
       if (e.button === 2) this.hookPressed = true;
     });
     addEventListener('mousemove', (e) => {
-      if (!this.locked || !this.enabled) return;
+      if (!this.enabled) return;
+      if (!this.locked && !(this.lockFailed && (e.buttons & 1))) return;
       // guard against the huge deltas some browsers emit right after locking
       const mx = Math.max(-200, Math.min(200, e.movementX || 0)), my = Math.max(-200, Math.min(200, e.movementY || 0));
       this.lookX += mx * 0.0021 * this.sens;
@@ -40,11 +44,18 @@ export class Input {
   }
 
   lock() {
-    if (this.touch || this.locked) return;
+    if (this.touch || this.locked || this.lockFailed) return;
     try {
       const p = this.canvas.requestPointerLock();
-      if (p && p.catch) p.catch(() => {});
-    } catch (e) { /* ignore */ }
+      if (p && p.catch) p.catch(() => this.lockFail());
+    } catch (e) { this.lockFail(); }
+  }
+  // Some embeds refuse pointer lock: fall back to click-and-drag look.
+  lockFail() {
+    this.locked = false;
+    if (this.lockFailed) return;
+    this.lockFailed = true;
+    this.game.onLockFailed && this.game.onLockFailed();
   }
   unlock() { if (document.pointerLockElement) document.exitPointerLock(); }
 
