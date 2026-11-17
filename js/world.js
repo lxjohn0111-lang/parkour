@@ -263,7 +263,17 @@ export class World {
         fill(row, 8, HW);
       } else fill(row, -HW, HW);
     }
-    // 3. the golden path: one guaranteed chain of roofs from start to goal
+    // 3. the golden path: one guaranteed chain of roofs from start to goal.
+    // Each night has its own height profile so the runs feel different.
+    const prof = def.profile || 'rolling';
+    const tgtH = (i) => {
+      const t = i / Math.max(1, nRows - 1);
+      if (prof === 'ascent') return 4.6 + t * 3.8;
+      if (prof === 'descent') return 8.3 - t * 3.8;
+      if (prof === 'valley') return 4.5 + Math.abs(t - 0.5) * 7.6;
+      if (prof === 'peaks') return 6.2 + Math.sin(t * Math.PI * 3.2) * 2.0;
+      return 6.1;
+    };
     let pb = rows[0].b.find((b) => b.path);
     const path = (this.path = [{ b: pb, enter: 0 }]);
     for (let i = 0; i < nRows - 1; i++) {
@@ -281,7 +291,7 @@ export class World {
       const special = row.gapKind !== 'street';
       nb.path = true; nb.axis = 'x';
       if (nb.kind === 'temple') pb.h = Math.max(pb.h, nb.h - 0.6);
-      else nb.h = special ? clamp(pb.h - R.range(0.2, 1.8), 4.2, 8) : clamp(pb.h + R.range(-1.7, 1.7) + (6.1 - pb.h) * 0.3, 4.2, 8.2);
+      else nb.h = special ? clamp(pb.h - R.range(0.2, 1.8), 4.2, 8) : clamp(pb.h + R.range(-1.3, 1.3) + (tgtH(i + 1) - pb.h) * 0.5, Math.max(4.2, pb.h - 2.6), Math.min(8.6, pb.h + 2.0));
       nb.z1 = next.z1; pb.z0 = row.z0;
       path[i].cross = cross;
       path.push({ b: nb, enter: cross });
@@ -302,6 +312,8 @@ export class World {
       const lot = opts[0 | (R() * Math.min(2, opts.length))];
       lot.kind = 'yard'; lot.tower = true;
     }
+    // 4b. the job: where the target is
+    this.planMission();
     // 5. emit everything
     for (const row of rows) {
       for (const b of row.b) this.emitLot(b);
@@ -312,8 +324,10 @@ export class World {
     this.emitGround(goalZ1);
     this.emitRopes();
     this.emitRoofClutter();
+    this.emitSetPieces();
     this.placePickups();
     this.placeGuards();
+    this.placeMission();
     this.emitBackdrop(goalZ1);
     // start / bounds
     const sb = rows[0].b.find((b) => b.path);
@@ -745,7 +759,7 @@ export class World {
   emitRoofClutter() {
     const pal = this.pal, R = this.R;
     for (const row of this.rows) for (const b of row.b) {
-      if (b.kind !== 'machiya' || b.axis !== 'x' || row.i === 0) continue;
+      if (b.kind !== 'machiya' || b.axis !== 'x' || row.i === 0 || b.noClutter) continue;
       const p = this.path.find((q) => q.b === b);
       const avoid = (x) => p && (Math.abs(x - p.enter) < 2.2 || Math.abs(x - (p.cross ?? 99)) < 2.2);
       const g = this.G(b.cz);
@@ -856,6 +870,109 @@ export class World {
     const far = off.filter((b) => b.row.i > 1 && Math.abs(b.cx) > 14);
     const cb = far.length ? R.pick(far) : off.length ? R.pick(off) : null;
     if (cb) add('cat', cb.cx, this.highest(cb.cx, cb.cz + 2) + 0.55, cb.cz + 2, 25);
+  }
+
+  // ------------------------------------------------------------- the job
+  // A neighbour of the path roof in row ri that is easy to reach (or the path roof itself).
+  jobRoof(ri, offPath = true) {
+    const R = this.R, row = this.rows[ri], pi = row.b.findIndex((b) => b.path), pb = row.b[pi];
+    const opts = offPath ? [row.b[pi - 1], row.b[pi + 1]].filter((b) => b && b.kind !== 'yard' && !b.tower && !b.job && b.x1 - b.x0 > 7) : [];
+    const b = opts.length ? R.pick(opts) : pb;
+    if (b !== pb) { b.kind = 'machiya'; b.axis = 'x'; b.h = clamp(pb.h + R.range(-0.5, 1.0), 4.2, 8.6); }
+    b.noClutter = true; b.job = true;
+    return b;
+  }
+  planMission() {
+    const def = this.def, n = this.rows.length;
+    const type = def.mission || 'steal';
+    const row = clamp(Math.round(n * 0.45), 2, n - 3);
+    const m = (this.mission = { type, row, roofs: [] });
+    if (type === 'signal') for (const f of [0.2, 0.33, 0.46]) m.roofs.push(this.jobRoof(clamp(Math.round(n * f), 1, n - 3)));
+    else if (type === 'pickpocket') m.roofs.push(this.jobRoof(row, false));
+    else m.roofs.push(this.jobRoof(row));
+  }
+  placeMission() {
+    const m = this.mission;
+    m.spots = m.roofs.map((b) => {
+      const x = b.cx + (m.type === 'signal' ? this.R.range(-2, 2) : 0);
+      return { x, y: this.highest(x, b.cz), z: b.cz, b };
+    });
+    const b = m.roofs[0], ridge = [[b.x0 + 1.6, b.cz], [b.x1 - 1.6, b.cz]];
+    if (m.type === 'assassinate') {
+      this.guardDefs.push({ kind: 'sentry', role: 'target', pts: ridge, facing: Math.PI });
+      this.guardDefs.push({ kind: 'sentry', pts: [[b.x1 - 1.2, b.cz], [b.x0 + 1.2, b.cz]], facing: 0 });
+    } else if (m.type === 'pickpocket') {
+      this.guardDefs.push({ kind: 'sentry', role: 'courier', pts: ridge, facing: Math.PI });
+    } else if (m.type === 'steal') {
+      this.guardDefs.push({ kind: 'sentry', pts: [[b.x0 + 1.4, b.cz], [b.cx - 1.6, b.cz]], facing: Math.PI });
+      this.guardDefs.push({ kind: 'sentry', pts: [[b.x1 - 1.4, b.cz], [b.cx + 1.6, b.cz]], facing: 0 });
+    }
+  }
+
+  // -------------------------------------------------------- set pieces
+  // Hay carts under leap perches, shimenawa ropes to slide under, billboard walls to wall-run.
+  emitSetPieces() {
+    const pal = this.pal, R = makeRng(this.def.seed ^ 0x2545f491), rows = this.rows;
+    const pieces = this.def.pieces || { hay: 0.4, slide: 0.25, wall: 0.7 };
+    this.hayCount = 0;
+    for (let i = 1; i < rows.length - 1; i++) {
+      const row = rows[i], next = rows[i + 1];
+      // Leap of Faith: the tallest roof edge over this street, with straw below
+      if (row.gapKind === 'street' && R.chance(pieces.hay)) {
+        const cands = [];
+        for (const b of row.b) if (b.kind !== 'yard' && b.kind !== 'temple' && !b.job) cands.push({ b, z: b.z0, s: -1 });
+        for (const b of next.b) if (b.kind !== 'yard' && b.kind !== 'temple' && !b.job) cands.push({ b, z: b.z1, s: 1 });
+        const best = cands.filter((c) => c.b.h >= 6).sort((a, c) => c.b.h - a.b.h)[0];
+        if (best) {
+          const b = best.b, x = clamp(b.cx + R.range(-2.5, 2.5), b.x0 + 1.4, b.x1 - 1.4);
+          const edge = best.z + best.s * (b.kind === 'machiya' ? P.OV : 0.5);
+          const y = this.highest(x, best.z + best.s * 0.2);
+          const zEnd = edge + best.s * 1.7;
+          const g = this.G(zEnd);
+          // the perch: a beam out over the street, with a streamer at its tip
+          g.box(x - 0.14, y - 0.18, Math.min(best.z, zEnd), x + 0.14, y + 0.02, Math.max(best.z, zEnd), pal.woodLight);
+          g.box(x - 0.03, y + 0.02, zEnd - 0.03, x + 0.03, y + 1.3, zEnd + 0.03, pal.wood);
+          g.box(x + 0.03, y + 0.75, zEnd - 0.02, x + 0.55, y + 1.25, zEnd + 0.02, pal.gold, { glow: 0.6 });
+          this.addSolid(x - 0.16, Math.min(best.z, zEnd), x + 0.16, Math.max(best.z, zEnd), y - 0.2, T_FLAT, y + 0.02);
+          // the cart, straw heaped high
+          const hz = zEnd, hx = x;
+          g.box(hx - 1.25, 0.25, hz - 0.8, hx + 1.25, 0.85, hz + 0.8, pal.woodMid, { type: 3 });
+          for (const e of [-1, 1]) g.cyl(hx + e * 0.8, 0, hz + 0.86, 0.38, 0.38, 0.12, 8, pal.wood);
+          g.blob(hx, 0.95, hz, 1.25, 0.55, 0.8, 0xe2b65a, 0, 0.3, 0xf3d27a);
+          g.blob(hx - 0.5, 1.15, hz + 0.1, 0.7, 0.35, 0.55, 0xf3d27a);
+          this.addSolid(hx - 1.25, hz - 0.8, hx + 1.25, hz + 0.8, 0, T_FLAT, 1.35, 1.35, { hay: true });
+          this.hayCount++;
+        }
+      }
+      // a billboard wall across a wide street: the wall-run line over the gap
+      if (row.gapKind === 'boulevard' && R.chance(pieces.wall)) {
+        const pe = this.path[i], side = R.sign();
+        const x = clamp(pe.cross + side * 2.4, -HW + 2, HW - 2);
+        // keep clear of the crate stacks against both house fronts (they are the way back up)
+        const za = row.z0 - 1.4, zb = next.z1 + 1.4;
+        const top = Math.max(this.highest(pe.cross, row.z0 + 1), this.highest(pe.cross, next.z1 - 1)) + 3.2;
+        const g = this.G((za + zb) / 2);
+        g.box(x - 0.12, 2.6, zb, x + 0.12, top, za, pal.woodMid, { type: 3 });
+        g.box(x - 0.16, top - 0.2, zb - 0.1, x + 0.16, top + 0.05, za + 0.1, pal.ridge);
+        for (const e of [-1, 1]) {
+          const xe = x + e * 0.13;
+          g.quadDir([xe, top - 2.6, zb + 1.2], [xe, top - 2.6, za - 1.2], [xe, top - 0.6, za - 1.2], [xe, top - 0.6, zb + 1.2], [e, 0, 0], R.pick([pal.red, pal.accent[0], pal.plaster[3]]), 0.15);
+        }
+        for (const zz of [za - 0.4, zb + 0.4, (za + zb) / 2]) g.box(x - 0.1, 0, zz - 0.1, x + 0.1, 2.7, zz + 0.1, pal.wood);
+        this.addSolid(x - 0.12, zb, x + 0.12, za, 2.6, T_FLAT, top);
+      }
+    }
+    // shimenawa ropes across path roofs: slide under, or climb over
+    for (let i = 2; i < this.path.length - 2; i++) {
+      const pe = this.path[i], b = pe.b;
+      if (b.job || b.kind !== 'machiya' || b.axis !== 'x' || !R.chance(pieces.slide)) continue;
+      const xa = clamp(Math.min(pe.enter, pe.cross) - 2.6, b.x0 + 0.3, b.x1 - 0.3), xb = clamp(Math.max(pe.enter, pe.cross) + 2.6, b.x0 + 0.3, b.x1 - 0.3);
+      const y0 = b.ridgeY + 0.16 + 1.08, g = this.G(b.cz);
+      g.box(xa, y0, b.cz - 0.14, xb, y0 + 0.28, b.cz + 0.14, 0xd9c48a);
+      for (let x = xa + 0.4; x < xb - 0.2; x += 0.7) g.quadDir([x - 0.1, y0 - 0.45, b.cz + 0.15], [x + 0.1, y0 - 0.45, b.cz + 0.15], [x + 0.1, y0, b.cz + 0.15], [x - 0.1, y0, b.cz + 0.15], [0, 0, 1], 0xffffff, 0.3);
+      for (const x of [xa, xb]) { g.box(x - 0.1, b.ridgeY - 0.2, b.cz - 0.1, x + 0.1, y0 + 0.5, b.cz + 0.1, pal.red); this.addSolid(x - 0.1, b.cz - 0.1, x + 0.1, b.cz + 0.1, b.ridgeY - 0.2, T_FLAT, y0 + 0.5); }
+      this.addSolid(xa, b.cz - 0.15, xb, b.cz + 0.15, y0, T_FLAT, y0 + 0.28);
+    }
   }
 
   placeGuards() {

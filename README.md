@@ -9,22 +9,28 @@ and do not get caught.
 
 ## Play
 
-* **12 campaign nights** across four districts (dusk, moonrise, festival night, first light),
-  an **Endless** mode and a **Daily Night** that is the same city for everyone that day.
-* **Parkour**: run, leap, auto-vault, ledge climb, wall run and wall kick, slide down roofs,
-  roll out of long drops, walk lantern lines, ride zip lines, grapple to gold rings.
+* **Every night is a job, then a chase.** Steal a treasure from a guarded roof, assassinate a
+  marked official, pickpocket a courier, or light three rebel beacons. The moment the job is
+  done the bells ring, the sky burns red and **the Hound** (追手), the shogun's own shinobi, runs
+  your exact route after you. Keep moving or he catches you.
+* **Tricks and combos.** Mid-air flips (front, back, sideways, doubles), takedowns from behind,
+  Death From Above, Leap of Faith into straw carts, slide-unders, wall runs, huge gaps, close
+  calls. Every trick feeds a combo with rank stamps (良 NICE → 伝説 LEGENDARY); bank it for score
+  and koban, or lose it all to a hit or a botched flip. Big moments drop into slow motion.
+* **Never the same night.** 12 campaign nights with different jobs, skyline profiles (ascent,
+  descent, valley, peaks) and weather (rain with lightning, snow, blossom storm, mist), plus
+  Endless and a Daily Night that roll their own. Two bonus contracts per night.
 * **Stealth**: sentries, street patrols and fire-tower lookouts with visible lantern light.
-  Stay in a roof's shadow, sneak, snuff lanterns with shuriken, vanish in smoke.
-* **Flow**: chaining moves builds speed and score. Three seals per night (Escaped, Ghost,
-  Swift), a rank, koban to spend in the Hideout on eight upgrade lines, and one hidden
-  lucky cat per night.
+  Stay in a roof's shadow, sneak, snuff lanterns with shuriken, vanish in smoke or straw.
+* Three seals per night (Escaped, Ghost, Contracts), a rank, eight upgrade lines in the
+  Hideout, and one hidden lucky cat per night.
 
 | Action | Keyboard / mouse | Touch |
 | --- | --- | --- |
 | Run / look | `W A S D` / mouse | left stick / drag right side |
-| Leap, climb, wall kick | `Space` | LEAP |
+| Leap, climb, wall kick · flip (again in mid-air) | `Space` | LEAP |
 | Sneak, slide, roll | `Shift` (or `C` to toggle) | SNEAK |
-| Shuriken | left click or `F` | STAR |
+| Takedown (close behind a guard) · shuriken | left click or `F` | STRIKE / STAR |
 | Smoke bomb | `Q` | SMOKE |
 | Grappling hook | `E` or right click | HOOK |
 | Back to checkpoint | `R` | pause menu |
@@ -75,6 +81,10 @@ Every SDK call is guarded, so the game also runs where the SDK is missing or dis
 | `js/config.js` | Palettes, nights, upgrades, guard barks |
 | `js/sdk.js`, `js/save.js`, `js/input.js` | CrazyGames SDK wrapper, saves, input |
 | `js/touch.js` | Touch joystick (left half) and drag-to-look (right half) |
+| `js/mission.js` | Nightly jobs (steal, assassinate, pickpocket, signal) and bonus contracts |
+| `js/hunter.js` | The Hound: the pursuer that runs the player's own route |
+| `js/combo.js` | Trick combos, rank tiers, banking |
+| `js/weather.js` | Rain with lightning, snow, blossom storm, mist |
 | `js/diag.js` | Touch diagnostics saved to the artifact's database; inactive outside claude.ai |
 
 ## Credits

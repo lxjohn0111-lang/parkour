@@ -1,11 +1,12 @@
 // DOM user interface: HUD, menus, hideout shop, results.
 import * as THREE from 'three';
 import { LEVELS, UPGRADES, WRAPS, PALETTES } from './config.js';
+import { CONTRACTS } from './mission.js';
 import { Save } from './save.js';
 import { fmtTime, clamp } from './util.js';
 
 const $ = (id) => document.getElementById(id);
-const _v = new THREE.Vector3();
+const _v = new THREE.Vector3(), _m = new THREE.Vector3();
 
 export class UI {
   constructor(game) {
@@ -139,16 +140,16 @@ export class UI {
   showResults(r) {
     const def = r.def;
     $('r-jp').textContent = def.jp;
-    $('r-sub').textContent = def.endless || def.daily ? def.name : `Night ${def.id} · ${def.name}`;
+    $('r-sub').textContent = `${def.endless || def.daily ? def.name : `Night ${def.id} · ${def.name}`} · ${r.verb}`;
     const rk = $('r-rank'); rk.textContent = r.rank; rk.className = 'rank ' + r.rank;
     $('r-time').textContent = fmtTime(r.time);
     const par = $('r-par'); par.textContent = `par ${fmtTime(def.par)}`; par.className = r.time <= def.par ? 'good' : '';
     $('r-koban').textContent = r.koban; $('r-koban-x').textContent = `of ${r.kobanMax}`;
-    $('r-style').textContent = r.style; $('r-flow').textContent = `peak flow ×${(1 + r.maxFlow * 2).toFixed(1)}`;
+    $('r-style').textContent = r.style.toLocaleString(); $('r-flow').textContent = `best combo ${r.tally.bestCombo} · ${r.tally.takedowns} takedowns · ${r.tally.flips} flips`;
     $('r-alerts').textContent = r.alerts; $('r-caught').textContent = r.deaths ? `captured ${r.deaths}×` : 'never caught';
     $('r-score').textContent = r.score.toLocaleString(); const best = $('r-best'); best.textContent = r.newBest ? 'NEW BEST' : `best ${fmtTime(r.best)}`; best.className = r.newBest ? 'good' : '';
     r.seals.forEach((on, i) => { const el = $('seal-' + i); el.classList.toggle('on', on); el.classList.toggle('new', r.newSeals[i]); });
-    $('seal-par').textContent = `Under ${fmtTime(def.par)}`;
+    $('seal-par').innerHTML = r.contracts.map((c) => `${c.ok ? '◆' : '◇'} ${c.text}`).join('<br>');
     $('seal-cat').classList.toggle('on', r.cat); $('seal-cat').classList.toggle('new', r.newCat);
     $('r-earn').textContent = r.earn;
     $('r-double').classList.toggle('hidden', r.earn <= 0);
@@ -164,7 +165,7 @@ export class UI {
     const box = $('pops');
     const el = document.createElement('div');
     el.className = 'pop' + (gold ? ' gold' : '');
-    el.innerHTML = `${label}<b>+${pts}</b>`;
+    el.innerHTML = pts ? `${label}<b>+${pts}</b>` : label;
     box.appendChild(el);
     while (box.children.length > 5) box.removeChild(box.firstChild);
     setTimeout(() => el.remove(), 1500);
@@ -178,22 +179,67 @@ export class UI {
   }
   hint(html, dur = 6) { const h = $('hint'); h.innerHTML = html; h.classList.remove('hidden'); this.hintT = dur; }
   subtitle(jp, en) { const s = $('subs'); s.querySelector('.jp').textContent = jp; s.querySelector('.en').textContent = en; s.classList.remove('hidden'); s.style.animation = 'none'; void s.offsetWidth; s.style.animation = ''; this.subT = 2.6; }
-  intro(def, pal) {
+  intro(def, pal, mission) {
     const el = $('intro');
     el.querySelector('.jp').textContent = def.jp;
     el.querySelector('.t').textContent = def.name;
-    el.querySelector('.d').textContent = `${pal.name.toUpperCase()} · ${pal.time.toUpperCase()}`;
-    el.querySelector('.x').textContent = def.intro;
+    const wx = { rain: 'RAIN', snow: 'SNOW', mist: 'MIST', blossom: 'BLOSSOM STORM' }[def.weather];
+    el.querySelector('.d').textContent = `${mission.verb} · ${pal.name.toUpperCase()} · ${pal.time.toUpperCase()}${wx ? ' · ' + wx : ''}`;
+    el.querySelector('.x').textContent = mission.brief;
+    el.querySelector('.c').innerHTML = mission.contracts.map((k) => `<span>◇ ${CONTRACTS[k].text}</span>`).join('');
     el.classList.remove('hidden'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
-    this.introT = 5.2;
+    this.introT = 6.2;
+  }
+
+  // ---- combo meter
+  combo(c) {
+    const el = $('combo');
+    clearTimeout(this._comboT);
+    el.classList.remove('hidden', 'banked', 'dropped');
+    $('combo-n').textContent = c.n;
+    $('combo-m').textContent = '×' + c.mult.toFixed(1);
+    $('combo-pts').textContent = Math.round(c.pts * c.mult).toLocaleString();
+    $('combo-list').innerHTML = c.list.slice(-3).reverse().map((t, i) => `<div style="opacity:${1 - i * 0.28}">${t.label} <b>+${t.pts}</b></div>`).join('');
+    const n = $('combo-n');
+    n.style.animation = 'none'; void n.offsetWidth; n.style.animation = '';
+    el.dataset.tier = c.tier;
+  }
+  comboTimer(k) { $('combo-bar').style.transform = `scaleX(${Math.max(0, k).toFixed(3)})`; }
+  comboTier(t) {
+    const el = $('tier');
+    el.querySelector('.jp').textContent = t.jp; el.querySelector('.en').textContent = t.en;
+    el.classList.remove('hidden'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+    clearTimeout(this._tierT); this._tierT = setTimeout(() => el.classList.add('hidden'), 1300);
+  }
+  comboBank(total, koban, n) {
+    const el = $('combo');
+    $('combo-pts').textContent = '+' + total.toLocaleString();
+    $('combo-list').innerHTML = `<div class="bank">${n} TRICKS BANKED${koban ? ` · <span class="koban"><b class="coin"></b>${koban}</span>` : ''}</div>`;
+    el.classList.add('banked');
+    clearTimeout(this._comboT); this._comboT = setTimeout(() => el.classList.add('hidden'), 1500);
+  }
+  comboDrop(n) {
+    const el = $('combo');
+    $('combo-list').innerHTML = `<div class="drop">COMBO LOST · ${n}</div>`;
+    el.classList.add('dropped');
+    clearTimeout(this._comboT); this._comboT = setTimeout(() => el.classList.add('hidden'), 1100);
+  }
+  // the brush slash across the screen on a takedown (or the Hound's blade on you)
+  slash(air, hurt = false) {
+    const el = $('slash');
+    el.className = hurt ? 'hurt' : air ? 'air' : '';
+    el.querySelector('.jp').textContent = hurt ? '斬' : air ? '天誅' : '斬';
+    el.style.animation = 'none'; void el.offsetWidth; el.style.animation = '';
+    clearTimeout(this._slashT); this._slashT = setTimeout(() => el.classList.add('hidden'), 900);
   }
   arrowWarn(from) { this.arrowFrom = from.clone(); this.arrowT = 0.8; const a = $('arrow-warn'); a.classList.remove('hidden'); const i = a.firstElementChild; i.style.animation = 'none'; void i.offsetWidth; i.style.animation = ''; }
   toast(text) { const t = $('toast'); t.textContent = text; t.classList.remove('hidden'); this.toastT = 2.6; }
   flashTool(id) { const el = $(id); el.classList.remove('flash'); void el.offsetWidth; el.classList.add('flash'); }
   clearTransient() {
-    for (const id of ['banner', 'hint', 'subs', 'intro', 'arrow-warn', 'ring', 'lockhint']) $(id).classList.add('hidden');
+    for (const id of ['banner', 'hint', 'subs', 'intro', 'arrow-warn', 'ring', 'lockhint', 'combo', 'tier', 'slash', 'prompt', 'hound']) $(id).classList.add('hidden');
     $('pops').innerHTML = '';
-    this.subT = this.hintT = this.bannerT = this.arrowT = this.introT = 0;
+    $('toast').classList.add('hidden');
+    this.subT = this.hintT = this.bannerT = this.arrowT = this.introT = this.toastT = 0;
   }
 
   // Bearing of a world position relative to the camera, in degrees clockwise from "ahead".
@@ -253,12 +299,36 @@ export class UI {
     }
     // goal marker pinned to the screen edge when out of view
     const W = innerWidth, H = innerHeight, cam = p.camera;
-    _v.set(goal.x, goal.y + 3, goal.z).project(cam);
+    g.mission.markerPos(_m);
+    const mdist = Math.hypot(_m.x - p.pos.x, _m.z - p.pos.z);
+    $('marker').classList.toggle('job', !g.mission.done);
+    _v.copy(_m).project(cam);
     let mx = (_v.x * 0.5 + 0.5) * W, my = (-_v.y * 0.5 + 0.5) * H;
     if (_v.z > 1) { mx = W - mx; my = H * 0.9; }
     mx = clamp(mx, W * 0.06, W * 0.94); my = clamp(my, H * 0.13, H * 0.86);
     $('marker').style.transform = `translate(${mx.toFixed(0)}px, ${my.toFixed(0)}px) translate(-50%, -50%)`;
-    this.set('marker-d', `${Math.round(dist)} m`);
+    this.set('marker-d', `${Math.round(mdist)} m`);
+    // contracts, the Hound, the takedown prompt
+    this._cT = (this._cT || 0) - dt;
+    if (this._cT <= 0) {
+      this._cT = 0.3;
+      const cs = g.mission.contractState();
+      const html = cs.map((c) => `<div class="${c.ok && !c.atEnd ? 'ok' : ''}">${c.ok && !c.atEnd ? '◆' : '◇'} ${c.text}</div>`).join('');
+      if (html !== this._cHtml) { this._cHtml = html; $('contracts').innerHTML = html; }
+    }
+    const h = g.hunter, hb = $('hound');
+    this.cls(hb, 'hidden', !h.active);
+    if (h.active) {
+      const lead = Math.max(0, h.lead);
+      $('hound-fill').style.transform = `scaleX(${clamp(1 - lead / 40, 0, 1).toFixed(3)})`;
+      this.set('hound-d', h.stun > 0 ? 'STUNNED' : `${Math.round(lead)} m`);
+      this.cls(hb, 'near', lead < 9);
+    }
+    const td = g.tdTarget;
+    this.cls($('prompt'), 'hidden', !td);
+    if (td) this.set('prompt', td.role === 'target' ? (g.input.touch ? 'STRIKE · THE MARK' : 'CLICK · ASSASSINATE') : g.input.touch ? 'STRIKE' : 'CLICK · TAKEDOWN');
+    const star = document.querySelector('.tb.throw');
+    if (star) { const t = td ? 'STRIKE' : 'STAR'; if (star.textContent !== t) { star.textContent = t; star.classList.toggle('strike', !!td); } }
     // hook target ring
     const ring = $('ring');
     if (g.hookTarget) {

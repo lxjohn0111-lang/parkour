@@ -32,11 +32,13 @@
     </svg>
     <div id="eye-meter"><i id="eye-fill"></i></div>
     <div id="eye-label">UNSEEN</div>
+    <div id="hound" class="hidden"><span class="hl"><b class="jp">追手</b> THE HOUND</span><div class="track"><i id="hound-fill"></i></div><span id="hound-d">24 m</span></div>
   </div>
   <div class="tr">
     <div id="obj-title">Night 1</div>
     <div id="obj-text">Reach the kite</div>
     <div class="row"><span id="timer">0:00.0</span><span id="dist">0 m</span></div>
+    <div id="contracts"></div>
   </div>
   <div class="br">
     <div class="tool" id="tool-hook"><span class="key">E</span><span class="ico hook"></span><span class="n">鉤</span></div>
@@ -50,10 +52,19 @@
   <div id="ring" class="hidden"></div>
   <div id="arrow-warn" class="hidden"><i></i></div>
   <div id="pops"></div>
+  <div id="combo" class="hidden">
+    <div class="top"><span id="combo-n">0</span><span class="x">TRICKS</span><span id="combo-m">×1.0</span></div>
+    <div id="combo-pts">0</div>
+    <div class="bar"><i id="combo-bar"></i></div>
+    <div id="combo-list"></div>
+  </div>
+  <div id="tier" class="hidden"><span class="jp"></span><span class="en"></span></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="slash" class="hidden"><i></i><span class="jp">斬</span></div>
   <div id="banner" class="hidden"><span class="jp"></span><span class="en"></span></div>
   <div id="hint" class="hidden"></div>
   <div id="subs" class="hidden"><div class="jp"></div><div class="en"></div></div>
-  <div id="intro" class="hidden"><div class="jp"></div><div class="t"></div><div class="d"></div><div class="x"></div></div>
+  <div id="intro" class="hidden"><div class="jp"></div><div class="t"></div><div class="d"></div><div class="x"></div><div class="c"></div></div>
 </div>
 
 <div id="touch">
@@ -131,6 +142,7 @@
 <section id="s-pause" class="screen panel-screen">
   <div class="panel narrow">
     <header><h3>PAUSED</h3></header>
+    <div id="p-contracts"></div>
     <button class="btn primary" id="p-resume"><span>RESUME</span></button>
     <button class="btn" id="p-checkpoint"><span>BACK TO CHECKPOINT</span></button>
     <button class="btn" id="p-restart"><span>RESTART NIGHT</span></button>
@@ -168,8 +180,8 @@
       </div>
       <div class="seals">
         <div class="sealbox" id="seal-0"><b class="seal"></b><span>ESCAPED</span><small>Reach the kite</small></div>
-        <div class="sealbox" id="seal-1"><b class="seal"></b><span>GHOST</span><small>No alarm raised</small></div>
-        <div class="sealbox" id="seal-2"><b class="seal"></b><span>SWIFT</span><small id="seal-par">Under par</small></div>
+        <div class="sealbox" id="seal-1"><b class="seal"></b><span>GHOST</span><small>No alarm before the job</small></div>
+        <div class="sealbox" id="seal-2"><b class="seal"></b><span>CONTRACTS</span><small id="seal-par">Both bonus contracts</small></div>
         <div class="sealbox cat" id="seal-cat"><b class="jp">招</b><span>LUCKY CAT</span><small>Hidden on every night</small></div>
       </div>
     </div>

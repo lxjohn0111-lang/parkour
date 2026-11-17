@@ -23,7 +23,9 @@ export class AudioSys {
     this.master = ctx.createGain();
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.2;
-    this.master.connect(comp); comp.connect(ctx.destination);
+    // a lowpass on the whole mix: wide open, closed down during slow motion
+    this.lp = ctx.createBiquadFilter(); this.lp.type = 'lowpass'; this.lp.frequency.value = 20000;
+    this.master.connect(this.lp); this.lp.connect(comp); comp.connect(ctx.destination);
     this.sfx = ctx.createGain(); this.music = ctx.createGain();
     this.sfx.connect(this.master); this.music.connect(this.master);
     // small plate-ish reverb from a generated impulse
@@ -43,6 +45,7 @@ export class AudioSys {
     this.loops.wind = this.loop('bandpass', 520, 0.6, 0);
     this.loops.slide = this.loop('bandpass', 1900, 1.2, 0);
     this.loops.wall = this.loop('highpass', 2600, 0.7, 0);
+    this.loops.rain = this.loop('highpass', 3200, 0.4, this.rainOn ? 0.05 : 0);
     this.applyVolume();
     this.nextT = ctx.currentTime + 0.1;
   }
@@ -204,6 +207,47 @@ export class AudioSys {
     this.taiko(t, 1); this.taiko(t + 0.28, 0.8);
     [9, 8, 6, 5].forEach((d, i) => this.koto(note(d, -1), t + 0.1 + i * 0.2, 0.22, 1.4));
   }
+  // ---- tricks, combos, the job
+  trick(n, big) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime, d = Math.min(14, 4 + n);
+    this.tone(note(d, 1), 0.22, { type: 'triangle', vol: 0.13 + (big ? 0.05 : 0), when: t, rev: 0.25 });
+    if (big) this.tone(note(d + 2, 1), 0.3, { type: 'triangle', vol: 0.1, when: t + 0.06, rev: 0.4 });
+    this.noise(0.05, { freq: 3000 + n * 120, q: 4, vol: 0.06, when: t });
+  }
+  tier(i) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.taiko(t, 0.7); this.taiko(t + 0.12, 0.6);
+    [0, 2, 4].forEach((d, k) => this.koto(note(5 + d + i, 0), t + 0.05 + k * 0.07, 0.2, 1.2));
+  }
+  bank(n) {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime, m = Math.min(8, 2 + Math.floor(n / 2));
+    for (let k = 0; k < m; k++) this.tone(note(5 + k * 2, 1), 0.25, { type: 'triangle', vol: 0.12, when: t + k * 0.045, rev: 0.3 });
+  }
+  drop() { this.tone(220, 0.35, { type: 'sawtooth', to: 70, vol: 0.12, lp: 900 }); this.noise(0.2, { type: 'lowpass', freq: 500, vol: 0.15 }); }
+  slash() {
+    if (!this.ctx) return;
+    this.noise(0.18, { freq: 5200, to: 1800, q: 3, vol: 0.32 });
+    this.tone(2900, 0.5, { type: 'triangle', vol: 0.09, rev: 0.6 });
+    this.taiko(this.ctx.currentTime + 0.04, 0.9);
+  }
+  flip() { this.noise(0.32, { freq: 700, to: 2600, q: 1.2, vol: 0.16 }); }
+  hay() { this.noise(0.45, { type: 'lowpass', freq: 1600, to: 300, vol: 0.32 }); this.noise(0.25, { freq: 2600, q: 1, vol: 0.1 }); }
+  ignite() { this.noise(0.6, { freq: 900, to: 3000, q: 0.7, vol: 0.25, rev: 0.3 }); this.tone(110, 0.4, { to: 60, vol: 0.2 }); }
+  bell() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    for (let k = 0; k < 3; k++) {
+      this.tone(196, 2.6, { vol: 0.2, when: t + k * 0.9, rev: 0.8 });
+      this.tone(196 * 2.76, 1.6, { vol: 0.07, when: t + k * 0.9, rev: 0.8 });
+      this.tone(196 * 5.4, 0.8, { vol: 0.04, when: t + k * 0.9 });
+    }
+  }
+  thunder() { this.noise(2.4, { type: 'lowpass', freq: 380, to: 60, vol: 0.5, attack: 0.08, rev: 0.6 }); }
+  rain(on) { this.rainOn = on; if (this.ctx) this.loops.rain.g.gain.setTargetAtTime(on ? 0.05 : 0, this.ctx.currentTime, 0.5); }
+  slow(on) { if (this.ctx) this.lp.frequency.setTargetAtTime(on ? 900 : 20000, this.ctx.currentTime, 0.06); }
   heartbeat(v) { this.tone(58, 0.16, { to: 38, vol: 0.3 * v }); }
 
   // ------------------------------------------------------------------ music

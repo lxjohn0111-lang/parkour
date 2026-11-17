@@ -101,23 +101,50 @@ export const LEVELS = [
     hints: [] },
 ];
 
-for (const L of LEVELS) L.par = Math.round(L.rows * 4.8 + 4);
+// Each night: a different job, a different skyline shape and different weather.
+const NIGHT = [
+  ['steal', 'rolling', 'clear', ['move', 'job', 'jump', 'takedown', 'flip', 'combo']],
+  ['pickpocket', 'ascent', 'mist', ['sneak', 'shadow', 'slide', 'hay']],
+  ['assassinate', 'peaks', 'clear', ['tower', 'shuriken']],
+  ['signal', 'descent', 'rain', ['rope', 'smoke']],
+  ['steal', 'valley', 'snow', ['hook', 'wallrun']],
+  ['assassinate', 'rolling', 'clear', []],
+  ['signal', 'peaks', 'blossom', []],
+  ['assassinate', 'ascent', 'rain', []],
+  ['steal', 'valley', 'blossom', []],
+  ['pickpocket', 'descent', 'mist', []],
+  ['assassinate', 'peaks', 'rain', []],
+  ['steal', 'ascent', 'snow', []],
+];
+LEVELS.forEach((L, i) => {
+  [L.mission, L.profile, L.weather, L.hints] = NIGHT[i];
+  L.hound = 6.9 + i * 0.13;
+  L.par = Math.round(L.rows * 5.6 + 22);
+});
+const JOBS = ['steal', 'assassinate', 'pickpocket', 'signal'], PROFILES = ['rolling', 'ascent', 'descent', 'valley', 'peaks'], SKIES = ['clear', 'clear', 'rain', 'snow', 'mist', 'blossom'];
+function randomNight(L, seed) {
+  L.mission = JOBS[seed % 4]; L.profile = PROFILES[(seed >>> 3) % 5]; L.weather = SKIES[(seed >>> 7) % 6];
+  L.par = Math.round(L.rows * 5.6 + 22);
+  return L;
+}
 
 export function endlessLevel(depth, seed) {
   const t = Math.min(depth, 14);
-  return {
+  const L = {
     id: 100 + depth, endless: true, name: `Endless Night ${depth}`, jp: '無限', d: (depth - 1 + (seed % 4)) % 4, seed: (seed * 7919 + depth * 104729) >>> 0,
     rows: 10 + Math.min(12, t), sentries: 4 + t, patrols: 2 + Math.floor(t / 2), towers: 1 + Math.floor(t / 3),
-    feats: { b: 0.2, c: 0.18, k: 0.2 }, par: Math.round((10 + Math.min(12, t)) * 4.8 + 4), intro: 'No gate, no dawn. How far can the Rat run?', hints: [],
+    feats: { b: 0.2, c: 0.18, k: 0.2 }, par: 0, intro: 'No gate, no dawn. How far can the Rat run?', hints: [], hound: 7.4 + Math.min(1.4, t * 0.1),
   };
+  return randomNight(L, (seed * 7919 + depth * 104729) >>> 0);
 }
 
 export function dailyLevel(seed) {
-  return {
+  const L = {
     id: 99, daily: true, name: 'Daily Night', jp: '今宵', d: seed % 4, seed: (seed * 2654435761) >>> 0,
-    rows: 16, sentries: 10, patrols: 5, towers: 3, feats: { b: 0.22, c: 0.18, k: 0.18 }, par: 81,
+    rows: 16, sentries: 10, patrols: 5, towers: 3, feats: { b: 0.22, c: 0.18, k: 0.18 }, par: 0, hound: 7.9,
     intro: 'Tonight\'s rooftops, the same for every thief in the city. One night, one best run.', hints: [],
   };
+  return randomNight(L, (seed * 2654435761) >>> 0);
 }
 
 export const UPGRADES = [
@@ -149,6 +176,8 @@ export const BARKS = {
   blind: [['灯りが消えた!', 'My light\'s gone out!'], ['目が!', 'My eyes!']],
   smoke: [['煙だ!', 'Smoke!'], ['何も見えん!', 'I can\'t see a thing!']],
   noise: [['何の音だ?', 'What was that sound?'], ['あっちか?', 'Over there?']],
+  body: [['何事だ!?', 'What happened?!'], ['やられた! 曲者だ!', 'Man down! Intruder!'], ['誰の仕業だ!', 'Who did this?!']],
+  pickpocket: [['財布が…ない!', 'My purse... it\'s gone!'], ['帳簿が! 泥棒だ!', 'The ledger! Thief!']],
 };
 
 export const RANKS = ['S', 'A', 'B', 'C', 'D'];

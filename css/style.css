@@ -342,3 +342,72 @@ body.touch #intro .d { font-size: calc(1.2 * var(--u)); }
 .tb { cursor: pointer; }
 .diag { font-size: calc(1.3 * var(--u)); color: var(--dim); letter-spacing: .04em; margin-top: calc(.6 * var(--u)); }
 
+
+/* ---------------------------------------------------------- the job, combos, the Hound */
+#contracts { margin-top: calc(.6 * var(--u)); font-size: calc(1.35 * var(--u)); letter-spacing: .06em; color: rgba(243, 231, 207, .88); line-height: 1.5; }
+#contracts .ok { color: var(--jade); }
+#marker.job b { background: var(--red); box-shadow: 0 0 0 calc(.25 * var(--u)) var(--ink), 0 0 calc(1.6 * var(--u)) var(--red); }
+#marker.job span { color: #ff8a70; }
+
+#hound { margin: calc(.8 * var(--u)) auto 0; width: calc(26 * var(--u)); display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: calc(.8 * var(--u)); font-size: calc(1.2 * var(--u)); letter-spacing: .18em; font-weight: 700; color: #ff8a70; }
+#hound .jp { font-weight: 400; color: var(--paper); margin-right: .3em; }
+#hound .track { height: calc(.7 * var(--u)); background: rgba(23, 18, 46, .75); transform: skewX(-18deg); overflow: hidden; }
+#hound-fill { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ff8a70, var(--red)); transform-origin: left; transform: scaleX(0); transition: transform .15s linear; }
+#hound-d { font-variant-numeric: tabular-nums; color: var(--paper); min-width: 4.2em; text-align: right; }
+#hound.near { animation: pulse .35s infinite alternate; }
+#hound.near #hound-d { color: #ff6a52; }
+
+#combo { position: absolute; right: calc(2.4 * var(--u) + env(safe-area-inset-right, 0px)); top: 30%; width: calc(28 * var(--u)); text-align: right; transform: skewX(-6deg); background: linear-gradient(270deg, rgba(23, 18, 46, .82), rgba(23, 18, 46, .55) 70%, rgba(23, 18, 46, 0)); padding: calc(1 * var(--u)) calc(1.4 * var(--u)) calc(1.2 * var(--u)) calc(4 * var(--u)); }
+#combo .top { display: flex; align-items: baseline; justify-content: flex-end; gap: calc(.8 * var(--u)); }
+#combo-n { font-size: calc(6 * var(--u)); font-weight: 700; line-height: .9; color: var(--paper); animation: comboPop .25s ease-out; display: inline-block; }
+#combo .x { font-size: calc(1.3 * var(--u)); letter-spacing: .3em; color: var(--dim); font-weight: 700; }
+#combo-m { font-size: calc(2.4 * var(--u)); font-weight: 700; color: var(--gold); }
+#combo-pts { font-size: calc(2.2 * var(--u)); font-weight: 700; color: var(--jade); font-variant-numeric: tabular-nums; letter-spacing: .06em; }
+#combo .bar { height: calc(.5 * var(--u)); background: rgba(23, 18, 46, .7); margin: calc(.4 * var(--u)) 0 calc(.6 * var(--u)) auto; width: 80%; overflow: hidden; }
+#combo-bar { display: block; height: 100%; width: 100%; background: var(--jade); transform-origin: right; }
+#combo-list { font-size: calc(1.45 * var(--u)); letter-spacing: .1em; text-transform: uppercase; font-weight: 700; line-height: 1.55; }
+#combo-list b { color: var(--jade); margin-left: .4em; }
+#combo[data-tier="1"] #combo-n, #combo[data-tier="2"] #combo-n { color: var(--gold); }
+#combo[data-tier="3"] #combo-n, #combo[data-tier="4"] #combo-n { color: #ff6a52; text-shadow: 0 0 calc(1.4 * var(--u)) rgba(255, 90, 60, .6); }
+#combo.banked #combo-pts { color: var(--gold); font-size: calc(3.2 * var(--u)); }
+#combo.banked .bar, #combo.dropped .bar { visibility: hidden; }
+#combo .bank { color: var(--gold); } #combo .drop { color: #ff6a52; }
+#combo.dropped #combo-n { color: #6d6585; text-decoration: line-through; }
+@keyframes comboPop { from { transform: scale(1.5); } }
+
+#tier { position: absolute; right: calc(8 * var(--u)); top: 17%; display: flex; align-items: center; gap: calc(1 * var(--u)); background: var(--red); padding: calc(.4 * var(--u)) calc(1.6 * var(--u)) calc(.6 * var(--u)); rotate: -4deg; box-shadow: calc(.5 * var(--u)) calc(.5 * var(--u)) 0 rgba(0, 0, 0, .35); animation: stamp 1.3s forwards; }
+#tier .jp { font-size: calc(5 * var(--u)); line-height: 1; color: var(--paper); text-shadow: none; }
+#tier .en { font-size: calc(1.8 * var(--u)); letter-spacing: .32em; font-weight: 700; color: var(--paper); }
+
+#prompt { position: absolute; left: 50%; top: calc(50% + 4.5 * var(--u)); transform: translateX(-50%); background: var(--red); color: var(--paper); font-weight: 700; letter-spacing: .26em; font-size: calc(1.5 * var(--u)); padding: calc(.5 * var(--u)) calc(1.4 * var(--u)); text-shadow: none; animation: pulse .4s infinite alternate; white-space: nowrap; }
+
+#slash { position: absolute; inset: 0; display: grid; place-items: center; animation: slashIn .85s forwards; }
+#slash i { position: absolute; left: -10%; right: -10%; top: 48%; height: calc(2.2 * var(--u)); background: linear-gradient(90deg, transparent, var(--red) 20%, #ff9a7a 50%, var(--red) 80%, transparent); rotate: -14deg; box-shadow: 0 0 calc(3 * var(--u)) rgba(216, 65, 47, .7); animation: slashLine .3s ease-out; transform-origin: left; }
+#slash .jp { font-size: calc(16 * var(--u)); color: var(--paper); text-shadow: 0 0 calc(2 * var(--u)) var(--red), calc(.6 * var(--u)) calc(.6 * var(--u)) 0 var(--ink); rotate: -8deg; }
+#slash.air .jp { font-size: calc(13 * var(--u)); }
+#slash.hurt i { background: linear-gradient(90deg, transparent, #fff 30%, #fff 70%, transparent); rotate: 18deg; }
+#slash.hurt .jp { color: var(--red); text-shadow: 0 0 calc(2 * var(--u)) #000; }
+@keyframes slashLine { from { transform: scaleX(0); } }
+@keyframes slashIn { 0% { opacity: 0; scale: 1.4; } 10% { opacity: 1; scale: 1; } 70% { opacity: 1; } 100% { opacity: 0; scale: 1.05; } }
+
+#intro .c { margin-top: calc(1 * var(--u)); display: flex; flex-direction: column; gap: calc(.3 * var(--u)); font-size: calc(1.5 * var(--u)); color: var(--gold); letter-spacing: .08em; font-weight: 700; }
+.tb.throw.strike { background: var(--red); border-color: var(--paper); }
+#pops { top: 60%; }
+body.touch #combo { right: auto; left: calc(2.2 * var(--u) + env(safe-area-inset-left, 0px)); top: calc(10 * var(--u) + env(safe-area-inset-top, 0px)); text-align: left; width: calc(30 * var(--u)); transform: none; background: linear-gradient(90deg, rgba(23, 18, 46, .8), rgba(23, 18, 46, 0)); padding: calc(.8 * var(--u)) calc(4 * var(--u)) calc(.8 * var(--u)) calc(1 * var(--u)); }
+body.touch #combo .top { justify-content: flex-start; }
+body.touch #combo .bar { margin-left: 0; }
+body.touch #combo-n { font-size: calc(4.4 * var(--u)); }
+body.touch #combo-list { font-size: calc(1.3 * var(--u)); }
+body.touch #pops { top: 52%; }
+body.touch #tier { top: 30%; right: auto; left: 50%; translate: -50% 0; }
+@media (orientation: portrait) { body.touch #combo { top: 38%; } body.touch #hound { width: 60vw; } }
+
+/* phones: contracts live in the pause menu, the top-right corner stays readable */
+body.touch #contracts { display: none; }
+#p-contracts { font-size: calc(1.5 * var(--u)); letter-spacing: .06em; color: var(--paper); line-height: 1.6; margin: calc(.4 * var(--u)) 0 calc(.8 * var(--u)); }
+#p-contracts .ok { color: var(--jade); }
+#p-contracts .job { color: var(--gold); font-weight: 700; letter-spacing: .1em; }
+@media (orientation: portrait) {
+  body.touch #obj-text { font-size: calc(1.55 * var(--u)); }
+  body.touch #hud .br { top: calc(16 * var(--u) + env(safe-area-inset-top, 0px)); }
+}

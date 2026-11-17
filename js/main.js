@@ -12,6 +12,10 @@ import { Save } from './save.js';
 import { LEVELS, PALETTES, WRAPS, endlessLevel, dailyLevel } from './config.js';
 import { clamp, damp, smooth, todaySeed } from './util.js';
 import { Diag } from './diag.js';
+import { Hunter } from './hunter.js';
+import { Mission } from './mission.js';
+import { Weather } from './weather.js';
+import { Combo } from './combo.js';
 
 const HINTS = {
   move: ['<kbd>W A S D</kbd> run &nbsp;·&nbsp; <kbd>MOUSE</kbd> look &nbsp;·&nbsp; follow the gold light', 'Left thumb: move · right thumb: drag to look around'],
@@ -26,6 +30,11 @@ const HINTS = {
   smoke: ['<kbd>Q</kbd> drops a smoke bomb. The watch loses you at once', '<b>SMOKE</b> drops a smoke bomb. The watch loses you at once'],
   hook: ['Buy the Kaginawa in the Hideout, then press <kbd>E</kbd> while looking at a gold ring', 'Buy the Kaginawa in the Hideout, then tap <b>HOOK</b> near a gold ring'],
   wallrun: ['Jump along a tall wall to run on it · <kbd>SPACE</kbd> again to kick off', 'Jump along a tall wall to run on it · <b>LEAP</b> again to kick off'],
+  job: ['Tonight\'s job is top right. Follow the red light to it, then run for the kite', 'Tonight\'s job is top right. Follow the red light, then run for the kite'],
+  takedown: ['Get behind a guard and <kbd>LEFT CLICK</kbd> to take him down · or drop on one from above', 'Get behind a guard and tap <b>STRIKE</b> · or drop on one from above'],
+  flip: ['Press <kbd>SPACE</kbd> again in mid-air to flip · hold <kbd>S</kbd> or <kbd>A</kbd>/<kbd>D</kbd> for back and side flips', 'Tap <b>LEAP</b> again in mid-air to flip'],
+  combo: ['Every trick feeds the combo. Keep moving to keep it alive, and bank it for koban', 'Every trick feeds the combo. Keep moving to keep it alive'],
+  hay: ['See a straw cart below a perch? Jump. Straw breaks any fall and hides you', 'Straw carts break any fall, and hide you'],
 };
 const RANK_BONUS = { S: 40, A: 25, B: 15, C: 8, D: 4 };
 
@@ -43,6 +52,9 @@ class Game {
     this.fxHurt = 0; this.fxFlash = 0; this.fade = 1; this.fadeTarget = 0; this.fxHidden = 0; this.sat = 1;
     this.endlessDepth = 1; this.adCount = 0;
     this.diag = new Diag(); this.diag.game = this; this.diagT = 0;
+    this.tally = {};
+    this.ts = 1; this.slowT = 0; this.slowK = 1; this.freezeT = 0; this.fovKick = 0; this.alarmK = 0;
+    this.baseFog = new THREE.Color(); this.baseTint = new THREE.Vector3(1, 1, 1); this.baseHor = new THREE.Color();
   }
 
   async boot() {
@@ -80,7 +92,11 @@ class Game {
     this.player = new Player(this);
     this.scene.add(this.player.camera, this.player.hookLine);
     this.actors = new Actors(this);
+    this.hunter = new Hunter(this);
+    this.mission = new Mission(this);
+    this.combo = new Combo(this);
     this.scene.add(this.actors.group);
+    this.weather = new Weather(this);
     this.applySettings(true);
     this.refreshStats();
     this.ui.syncSettings();
@@ -167,9 +183,13 @@ class Game {
     this.hemi.color.setHex(pal.hemiSky); this.hemi.groundColor.setHex(pal.hemiGround); this.hemi.intensity = pal.hemiInt;
     this.sun.color.setHex(pal.sun); this.sun.intensity = pal.sunInt;
     const fx = this.gfx.fx;
-    fx.uFogColor.value.setHex(pal.fog); fx.uFogDensity.value = pal.fogDensity; fx.uInk.value.setHex(pal.ink);
-    fx.uTint.value.setRGB(pal.tint[0], pal.tint[1], pal.tint[2]);
     this.actors.petalMat.color.setHex(pal.blossom[1]);
+    this.weather.set(def.weather || 'clear');
+    const wm = this.weather.tintMul;
+    this.baseFog.setHex(pal.fog); this.baseHor.setHex(pal.skyHor);
+    this.baseTint.set(pal.tint[0] * wm, pal.tint[1] * wm, pal.tint[2] * wm);
+    fx.uFogColor.value.copy(this.baseFog); fx.uFogDensity.value = pal.fogDensity * this.weather.fogMul; fx.uInk.value.setHex(pal.ink);
+    fx.uTint.value.set(this.baseTint.x, this.baseTint.y, this.baseTint.z);
     this.actors.build(this.world);
     this.player.reset(this.world.start);
     this.kobanMax = this.world.pickups.filter((p) => p.type === 'koban').length + this.world.pickups.filter((p) => p.type === 'stack').length * 5;
@@ -180,6 +200,11 @@ class Game {
     this.hp = this.stats.maxHp; this.stars = this.stats.starMax; this.smokes = this.stats.smokeMax;
     this.over = false; this.invuln = 0; this.calmT = 0; this.sat = 1; this.fxHurt = 0; this.coinStreak = 0;
     this.player.style = 0;
+    this.run.jobAlerts = 0;
+    this.tally = { takedowns: 0, airKills: 0, flips: 0, bestCombo: 0, leaps: 0, snuffs: 0, wallruns: 0, closeCalls: 0, escapeHits: 0 };
+    this.combo.reset(); this.hunter.reset();
+    this.ts = 1; this.slowT = 0; this.freezeT = 0; this.fovKick = 0; this.alarmK = 0; this.hayFall = false; this.escapeT = 0;
+    this.mission.setup(this.world, this.def);
     const touch = this.input.touch ? 1 : 0;
     this.hintQ = (this.def.hints || []).map((k) => HINTS[k][touch]);
     this.hintT = 5.6; // after the night's title card
@@ -201,9 +226,10 @@ class Game {
     this.ui.hideScreens();
     this.ui.hud(true);
     this.set('playing');
-    this.ui.intro(this.def, this.pal);
-    this.ui.set('obj-title', this.def.endless || this.def.daily ? this.def.name.toUpperCase() : `NIGHT ${this.def.id} · ${this.pal.name.toUpperCase()}`);
-    this.ui.set('obj-text', 'Reach the kite');
+    this.ui.intro(this.def, this.pal, this.mission);
+    this.ui.set('obj-title', `${this.def.endless || this.def.daily ? this.def.name.toUpperCase() : 'NIGHT ' + this.def.id} · ${this.mission.verb}`);
+    this.ui.set('obj-text', this.mission.objective);
+    this.audio.setMode('calm');
     Save.data.totals.runs++; Save.save();
     this.fadeTarget = 0;
     this.busy = false;
@@ -214,6 +240,7 @@ class Game {
     const playing = state === 'playing';
     this.input.enabled = playing;
     if (playing) { this.input.lock(); SDK.gameplayStart(); this.audio.resume(); }
+    if (!playing) { this.audio.slow(false); this.ts = 1; this.slowT = 0; this.freezeT = 0; }
     else { SDK.gameplayStop(); this.audio.stopLoops(); this.audio.setWind(0); }
     if (state !== 'playing' && state !== 'finale') this.input.unlock();
     this.player.arms.visible = state === 'playing' || state === 'paused' || state === 'failed';
@@ -226,6 +253,8 @@ class Game {
     if (this.input.touch) this.diag.flush(this);
     this.set('paused');
     this.ui.show('pause');
+    const pc = document.getElementById('p-contracts');
+    if (pc) pc.innerHTML = `<div class="job">${this.mission.objective}</div>` + this.mission.contractState().map((c) => `<div class="${c.ok && !c.atEnd ? 'ok' : ''}">${c.ok && !c.atEnd ? '◆' : '◇'} ${c.text}</div>`).join('');
     const el = document.getElementById('p-diag'), tc = this.input.tc;
     if (el) {
       el.classList.toggle('hidden', !this.input.touch || !tc);
@@ -329,14 +358,70 @@ class Game {
 
   // ------------------------------------------------------------ game events
   noise(x, y, z, radius, strength) { this.actors.hear(x, y, z, radius, strength); }
-  onStyle(label, pts) { this.ui.stylePop(label, pts); }
+  onStyle(label, pts) { this.onTrick(label, pts); }
+  // every trick in the game ends up here
+  onTrick(label, pts, big = false) {
+    if (this.over || this.state !== 'playing') return;
+    if (label === 'Wall Run') this.tally.wallruns++;
+    if (label === 'Lantern Snuffed' || label === 'Lights Out') this.tally.snuffs++;
+    this.combo.add(label, pts, big);
+  }
+  slowmo(k, dur) { this.slowK = Math.min(this.slowT > 0 ? this.slowK : 1, k); this.slowT = Math.max(this.slowT, dur); }
+  tryAirKill(p, fall) { return this.actors.tryAirKill(p, fall); }
+  onTakedown(g, air) {
+    this.tally.takedowns++;
+    if (air) this.tally.airKills++;
+    const mark = g.role === 'target';
+    this.onTrick(air ? 'Death From Above' : mark ? 'Assassination' : 'Takedown', air ? 320 : mark ? 260 : 150, true);
+    this.freezeT = 0.07; this.slowmo(0.28, air ? 0.75 : 0.5);
+    this.fovKick = 9; this.player.shake = Math.max(this.player.shake, 0.5);
+    this.ui.slash(air);
+    this.audio.slash();
+    this.noise(g.pos.x, g.pos.y, g.pos.z, 6, 0.4);
+  }
+  onHayLanding(fall) {
+    this.audio.hay();
+    this.actors.burst({ x: this.player.pos.x, y: this.player.pos.y + 0.6, z: this.player.pos.z }, 0xf3d27a, 22, 4, 3);
+    if (fall > 4.5) { this.tally.leaps++; this.onTrick('Leap of Faith', 280, true); }
+    // the straw hides you: the watch and the Hound lose the trail for a moment
+    if (this.actors.alert === 'alert') { this.actors.loseTrail(9); this.onEscapeAlert(false); }
+    if (this.hunter.active) this.hunter.stun = Math.max(this.hunter.stun, 2.2);
+  }
+  onCloseCall() { this.tally.closeCalls++; this.onTrick('Close Call', 70); this.slowmo(0.35, 0.3); }
+  onBail() { this.combo.drop(); this.ui.stylePop('Bail!', 0); this.audio.land(0.8, true); }
+  onHoundStrike() {
+    this.ui.slash(false, true);
+    this.audio.slash();
+    this.damage(26, 'hound', { pos: this.hunter.pos });
+  }
+  // The job is done: alarm bells, a red sky, and the Hound on your heels.
+  startEscape(how) {
+    const words = { steal: ['盗', 'STOLEN'], kill: ['暗殺', 'ASSASSINATED'], pickpocket: ['掏', 'LIFTED'], 'courier-down': ['奪', 'TAKEN'], signal: ['狼煙', 'SIGNAL LIT'] }[how] || ['完', 'DONE'];
+    this.ui.banner(words[0], words[1], 'gold');
+    if (how === 'steal' || how === 'signal') this.onTrick(how === 'steal' ? 'The Heist' : 'Beacon Lit', 250, true);
+    this.slowmo(0.3, 0.9);
+    this.fovKick = 10;
+    this.audio.bell();
+    this.ui.set('obj-text', this.mission.objective);
+    this.ui.toast('The city wakes. Run for the kite!');
+    this.escapeT = 1.6; // the Hound arrives a moment later (game time)
+  }
+  releaseHound() {
+    this.hunter.start();
+    this.actors.manhunt();
+    this.ui.banner('追手', 'THE HOUND IS ON YOUR TRAIL', 'red');
+    this.audio.whistle();
+  }
   onLand(impact, p) { if (impact > 7) this.actors.burst({ x: p.x, y: p.y + 0.1, z: p.z }, this.pal.tile[2], Math.min(10, Math.round(impact * 0.6)), 3, 1.5); }
   onAlert(first) {
     this.run.alerts++;
+    if (!this.mission.done) this.run.jobAlerts++;
     this.ui.banner('発見', 'SPOTTED', 'red');
     this.fxFlash = 0.2;
   }
   onEscapeAlert(bySmoke) {
+    // during the escape the watch can lose you, but the Hound never does: no celebration
+    if (this.hunter.active && !bySmoke) return;
     this.ui.banner('隠密', 'VANISHED', 'jade');
     this.player.addFlow(0.2, bySmoke ? 80 : 150, 'Gave Them The Slip');
   }
@@ -363,6 +448,8 @@ class Game {
   damage(amount, kind, guard, vel) {
     if (this.over || this.invuln > 0) return;
     this.hp -= amount;
+    this.combo.drop();
+    if (this.mission.done) this.tally.escapeHits++;
     this.invuln = 0.45; this.calmT = 0;
     this.fxHurt = 1; this.player.shake = 1; this.player.flow *= 0.5;
     this.audio.hurt();
@@ -374,7 +461,7 @@ class Game {
     }
     if (this.hp <= 0) {
       this.hp = 0;
-      this.fail(kind === 'fall' ? 'You hit the street hard. The watch found you where you lay.' : kind === 'arrow' ? 'An arrow from the fire tower brought you down.' : 'The night watch has you. Edo will hear of this by morning.');
+      this.fail(kind === 'fall' ? 'You hit the street hard. The watch found you where you lay.' : kind === 'arrow' ? 'An arrow from the fire tower brought you down.' : kind === 'hound' || kind === 'kunai' ? 'The Hound caught you on the tiles. Nobody outruns him by standing still.' : 'The night watch has you. Edo will hear of this by morning.');
     }
   }
   onSplash() {
@@ -402,23 +489,26 @@ class Game {
   finish() {
     if (this.over) return;
     this.over = true;
+    this.combo.bank();
     const def = this.def, r = this.run, d = Save.data;
     const time = r.time;
-    const seals = [true, r.alerts === 0, time <= def.par];
+    const contracts = this.mission.contractState();
+    const allContracts = contracts.every((c) => c.ok);
+    const seals = [true, r.jobAlerts === 0, allContracts];
     let rank = 'D';
-    if (time <= def.par && r.alerts === 0 && r.deaths === 0) rank = 'S';
-    else if (time <= def.par * 1.25 && r.deaths === 0 && r.alerts <= 1) rank = 'A';
-    else if (time <= def.par * 1.6 && r.deaths <= 1) rank = 'B';
+    if (allContracts && r.jobAlerts === 0 && r.deaths === 0 && time <= def.par) rank = 'S';
+    else if (r.deaths === 0 && (allContracts || r.jobAlerts === 0) && time <= def.par * 1.3) rank = 'A';
+    else if (time <= def.par * 1.7 && r.deaths <= 1) rank = 'B';
     else if (r.deaths <= 2) rank = 'C';
     const style = this.player.style;
-    const score = Math.max(0, Math.round(style + r.koban * 20 + Math.max(0, def.par * 1.6 - time) * 25 + (r.alerts === 0 ? 1500 : Math.max(0, 600 - 300 * r.alerts)) - r.deaths * 400));
+    const score = Math.max(0, Math.round(style + r.koban * 20 + Math.max(0, def.par * 1.6 - time) * 25 + (r.jobAlerts === 0 ? 1500 : 0) + contracts.filter((c) => c.ok).length * 1000 - r.deaths * 400));
     const key = def.daily ? 'daily' : def.endless ? 'endless' : String(def.id);
     const rec = d.levels[key] || { best: 0, rank: '', seals: [false, false, false], cat: false, score: 0 };
     const order = 'SABCD';
     const newSeals = seals.map((s, i) => s && !rec.seals[i]);
     const newCat = r.cat && !rec.cat;
     const fresh = !def.daily && !def.endless;
-    let earn = r.koban + RANK_BONUS[rank] + (fresh ? newSeals.filter(Boolean).length * 15 : 0) + (newCat && fresh ? 25 : 0);
+    let earn = r.koban + RANK_BONUS[rank] + (fresh ? newSeals.filter(Boolean).length * 15 : 0) + (newCat && fresh ? 25 : 0) + contracts.filter((c) => c.ok).length * 20;
     if (def.endless) earn += def.depth * 6;
     const newBest = !rec.best || time < rec.best;
     if (fresh) {
@@ -433,7 +523,7 @@ class Game {
     } else d.endlessBest = Math.max(d.endlessBest, def.depth);
     d.koban += earn; d.totals.koban += earn;
     Save.save();
-    this.lastResult = { def, time, rank, seals, newSeals: fresh ? newSeals : [false, false, false], cat: r.cat, newCat: newCat && fresh, koban: r.koban, kobanMax: this.kobanMax, style, maxFlow: r.maxFlow, alerts: r.alerts, deaths: r.deaths, score, earn, newBest: fresh ? newBest : true, best: rec.best || time, hasNext: def.endless || (fresh && def.id < LEVELS.length), doubled: false };
+    this.lastResult = { def, time, rank, seals, newSeals: fresh ? newSeals : [false, false, false], cat: r.cat, newCat: newCat && fresh, koban: r.koban, kobanMax: this.kobanMax, style, maxFlow: r.maxFlow, alerts: r.alerts, deaths: r.deaths, score, earn, newBest: fresh ? newBest : true, best: rec.best || time, hasNext: def.endless || (fresh && def.id < LEVELS.length), doubled: false, contracts, tally: { ...this.tally }, verb: this.mission.verb };
     // finale: take the kite and glide out over the city
     this.set('finale');
     this.player.frozen = true;
@@ -460,10 +550,18 @@ class Game {
     const p = this.player, A = this.actors, fx = this.gfx.fx;
 
     if (this.state === 'playing') {
+      // slow motion and hit-stop
+      if (this.freezeT > 0) { this.freezeT -= dt; this.ts = 0.03; }
+      else {
+        if (this.slowT > 0) this.slowT -= dt;
+        this.ts = damp(this.ts, this.slowT > 0 ? this.slowK : 1, this.slowT > 0 ? 30 : 6, dt);
+      }
+      this.audio.slow(this.ts < 0.7);
+      const sdt = dt * this.ts;
       this.input.poll();
-      const steps = dt > 1 / 50 ? 2 : 1;
+      const steps = sdt > 1 / 50 ? 2 : 1;
       for (let i = 0; i < steps; i++) {
-        this.step(dt / steps);
+        this.step(sdt / steps);
         this.input.endFrame();
       }
     } else if (this.state === 'menu') {
@@ -473,7 +571,18 @@ class Game {
     } else {
       p.updateCamera(dt, 0, 0);
     }
-    A.updateParticles(dt, p.camera);
+    A.updateParticles(dt * this.ts, p.camera);
+    this.weather.update(dt, p.camera);
+    this.fovKick = Math.max(0, this.fovKick - dt * 14);
+    // once the alarm is up the whole city burns red
+    this.alarmK = damp(this.alarmK, this.mission.done && playingOrPaused(this.state) ? 1 : 0, 1.2, dt);
+    if (this.alarmK > 0.001 || this._alarmOn) {
+      this._alarmOn = this.alarmK > 0.001;
+      const k = this.alarmK, pulse = 0.5 + 0.5 * Math.sin(this.time * 2.2);
+      fx.uFogColor.value.copy(this.baseFog).lerp(_red, 0.28 * k);
+      fx.uTint.value.set(this.baseTint.x * (1 + 0.1 * k), this.baseTint.y * (1 - 0.06 * k), this.baseTint.z * (1 - 0.08 * k));
+      this.sky.material.uniforms.uHor.value.copy(this.baseHor).lerp(_red, (0.3 + 0.1 * pulse) * k);
+    }
     this.audio.update(dt);
     this.ui.update(dt);
 
@@ -483,10 +592,10 @@ class Game {
     const playing = this.state === 'playing';
     const hidden = playing && p.inShadow && A.detect < 0.04 && A.alert === 'calm';
     this.fxHidden = damp(this.fxHidden, hidden ? 1 : 0, 4, dt);
-    this.sat = damp(this.sat, this.state === 'failed' ? 0.15 : 1, 3, dt);
+    this.sat = damp(this.sat, this.state === 'failed' ? 0.15 : this.ts < 0.7 ? 0.7 : 1, 3, dt);
     fx.uHurt.value = this.fxHurt; fx.uFlash.value = this.fxFlash; fx.uFade.value = this.fade; fx.uHidden.value = this.fxHidden; fx.uSat.value = this.sat;
     fx.uDanger.value = !playing ? 0 : A.alert === 'alert' ? 0.55 + Math.sin(this.time * 9) * 0.15 : A.detect * 0.75;
-    fx.uSpeed.value = playing ? smooth(9.6, 15, Math.hypot(p.vel.x, p.vel.y * 0.6, p.vel.z)) * (0.5 + p.flow * 0.5) + (p.state === 'hook' ? 0.6 : 0) : this.state === 'finale' ? 0.7 : 0;
+    fx.uSpeed.value = playing ? smooth(9.6, 15, Math.hypot(p.vel.x, p.vel.y * 0.6, p.vel.z)) * (0.5 + p.flow * 0.5) + (p.state === 'hook' ? 0.6 : 0) + (p.flip ? 0.5 : 0) + (this.ts < 0.7 ? 0.4 : 0) : this.state === 'finale' ? 0.7 : 0;
 
     // environment follows the camera
     const cam = p.camera;
@@ -512,8 +621,10 @@ class Game {
       }
       if (this.run.time > 12 && this.diag.writes < 2) this.diag.flush(this);
     }
-    // tools
-    if (inp.throwPressed && !this.over) {
+    // tools: a guard within reach and off guard means a takedown instead of a throw
+    this.tdTarget = this.over ? null : A.takedownTarget(p);
+    if (inp.throwPressed && !this.over && this.tdTarget) { p.throwT = 0.3; A.takedown(this.tdTarget, false); }
+    else if (inp.throwPressed && !this.over) {
       if (this.stars > 0) { this.stars--; p.throwT = 0.3; p.camera.updateMatrixWorld(); A.throwShuriken(p.camera); this.ui.flashTool('tool-star'); }
       else this.audio.deny();
     }
@@ -522,7 +633,19 @@ class Game {
       else this.audio.deny();
     }
     p.update(dt, inp);
+    this.hunter.record(p.pos);
     A.update(dt);
+    this.mission.update(dt);
+    if (this.escapeT > 0) { this.escapeT -= dt; if (this.escapeT <= 0 && !this.over) this.releaseHound(); }
+    this.hunter.update(dt);
+    this.combo.update(dt);
+    if (this.mission.type === 'signal' && !this.mission.done) this.ui.set('obj-text', this.mission.objective);
+    // falling towards straw from high up: time slows for the Leap of Faith
+    if (p.state === 'air' && p.vel.y < -5 && !this.hayFall) {
+      const gy = this.world.groundAt(p.pos.x, p.pos.z, p.pos.y, 0);
+      if (this.world.hit && this.world.hit.hay && p.pos.y - gy > 4) { this.hayFall = true; this.slowmo(0.4, 0.55); this.audio.flip(); }
+    }
+    if (p.grounded) this.hayFall = false;
     r.maxFlow = Math.max(r.maxFlow, p.flow);
     // slow regeneration once things are quiet
     this.calmT = A.alert === 'calm' ? this.calmT + dt : 0;
@@ -539,7 +662,10 @@ class Game {
     } else this.hookTarget = null;
     // the kite
     const g = this.world.goal;
-    if (!this.over && Math.hypot(g.x - p.pos.x, g.z - p.pos.z) < g.r && Math.abs(p.pos.y - g.y) < 2.5) this.finish();
+    if (!this.over && Math.hypot(g.x - p.pos.x, g.z - p.pos.z) < g.r && Math.abs(p.pos.y - g.y) < 2.5) {
+      if (this.mission.done) this.finish();
+      else if (!this.goalNag) { this.goalNag = true; this.ui.toast(`The kite waits for the job: ${this.mission.objective}`); setTimeout(() => { this.goalNag = false; }, 4000); }
+    }
   }
 
   findHookTarget() {
@@ -603,6 +729,8 @@ class Game {
 }
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const _red = new THREE.Color(0xff4a30);
+const playingOrPaused = (s) => s === 'playing' || s === 'paused' || s === 'failed';
 
 const game = new Game();
 window.__game = game;

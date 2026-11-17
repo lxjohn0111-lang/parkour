@@ -22,6 +22,21 @@ function shared() {
   body.box(-0.1, 1.1, 0.15, 0.1, 1.32, 0.165, red);
   body.cyl(0, 1.66, 0, 0.4, 0.06, 0.2, 8, dark);
   body.box(-0.05, 1.7, -0.33, 0.05, 1.78, -0.27, gold);
+  // the mark: silk robe, tall black eboshi hat, gold sash
+  const vip = new GeoBuilder();
+  vip.box(-0.28, 0.5, -0.19, 0.28, 1.47, 0.19, 0x5a2f78);
+  vip.box(-0.3, 0.4, -0.21, 0.3, 0.62, 0.21, 0x3d1f55);
+  vip.box(-0.29, 0.92, -0.2, 0.29, 1.04, 0.2, gold);
+  vip.box(-0.12, 1.47, -0.12, 0.12, 1.74, 0.12, skin);
+  vip.box(-0.09, 1.72, -0.14, 0.09, 2.12, 0.1, dark);
+  vip.box(-0.31, 1.18, -0.21, 0.31, 1.42, 0.21, 0x6c3a8e);
+  // the courier: plain kimono, a satchel glowing with what you came for
+  const cour = new GeoBuilder();
+  cour.box(-0.24, 0.6, -0.15, 0.24, 1.44, 0.15, 0x6b4a3a);
+  cour.box(-0.11, 1.44, -0.11, 0.11, 1.72, 0.11, skin);
+  cour.cyl(0, 1.64, 0, 0.36, 0.05, 0.18, 8, 0xc9a36a);
+  cour.box(-0.17, 0.82, 0.15, 0.17, 1.2, 0.33, 0x3a2a2a);
+  cour.box(-0.12, 1.2, 0.18, 0.12, 1.28, 0.3, gold, { glow: 1.6 });
   const leg = new GeoBuilder();
   leg.box(-0.105, -0.6, -0.115, 0.105, 0.02, 0.115, hak);
   leg.box(-0.1, -0.7, -0.22, 0.1, -0.6, 0.1, dark);
@@ -53,7 +68,7 @@ function shared() {
   const koban = new THREE.CylinderGeometry(0.15, 0.15, 0.04, 10);
   koban.scale(1.35, 1, 0.85); koban.rotateX(Math.PI / 2);
   SHARED = {
-    body: body.build(), leg: leg.build(), armR: armR.build(), armL: armL.build(), lanFrame: lan.build(),
+    body: body.build(), vip: vip.build(), courier: cour.build(), leg: leg.build(), armR: armR.build(), armL: armL.build(), lanFrame: lan.build(),
     lanGlow: new THREE.BoxGeometry(0.25, 0.35, 0.25).translate(0, -0.275, 0), cone, star: star.build(), arrow: arrow.build(), koban,
     ico: new THREE.IcosahedronGeometry(1, 0),
   };
@@ -65,7 +80,8 @@ class Guard {
     this.A = actors; this.def = def; this.tower = tower;
     const S = shared(), mats = actors.game.mats;
     const g = (this.group = new THREE.Group());
-    this.body = new THREE.Mesh(S.body, mats.toon);
+    this.role = (def && def.role) || null;
+    this.body = new THREE.Mesh(this.role === 'target' ? S.vip : this.role === 'courier' ? S.courier : S.body, mats.toon);
     this.legL = new THREE.Mesh(S.leg, mats.toon); this.legL.position.set(-0.13, 0.7, 0);
     this.legR = new THREE.Mesh(S.leg, mats.toon); this.legR.position.set(0.13, 0.7, 0);
     this.armL = new THREE.Mesh(S.armL, mats.toon); this.armL.position.set(-0.33, 1.4, 0);
@@ -76,6 +92,15 @@ class Guard {
     this.lan.add(this.lanFrame, this.lanGlow);
     this.armL.add(this.lan);
     g.add(this.body, this.legL, this.legR, this.armL, this.armR);
+    if (this.role === 'target' || this.role === 'courier') {
+      // a red diamond over the mark, bright enough to read across the city
+      this.mark = new THREE.Mesh(new THREE.OctahedronGeometry(0.28, 0), actors.markMat);
+      this.mark.scale.set(0.8, 1.3, 0.8);
+      this.mark.position.y = 2.75;
+      g.add(this.mark);
+      this.lan.visible = this.role !== 'target';
+    }
+    this.downT = -1; // >= 0 once taken down
     g.traverse((o) => { if (o.isMesh) { o.castShadow = o !== this.lanGlow; o.receiveShadow = false; } });
     this.coneMat = new THREE.MeshBasicMaterial({ vertexColors: true, color: 0xffc46a, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, side: THREE.DoubleSide, opacity: 0.1, fog: false });
     this.cone = new THREE.Mesh(S.cone, this.coneMat);
@@ -138,7 +163,10 @@ class Guard {
     const A = this.A, game = A.game, w = game.world;
     this.t += dt; this.barkCd -= dt; this.attackCd -= dt; this.jumpCd -= dt;
     if (this.tower) return this.updateTower(dt, pl);
+    if (this.downT >= 0) return this.updateDown(dt);
     const alert = A.alert;
+    // the mark and the courier do not fight: they cower and shout
+    if (this.role && this.state === 'chase') { this.state = 'search'; this.wait = 4; }
     // stunned by a shuriken: lantern out, blind
     if (this.stun > 0) {
       this.stun -= dt; this.aware = 0;
@@ -232,6 +260,18 @@ class Guard {
     }
     this.physics(dt, mvx, mvz, speed);
     this.sync(dt);
+  }
+
+  updateDown(dt) {
+    this.downT += dt;
+    this.sees = false; this.aware = 0; this.lit = false;
+    const t = Math.min(1, this.downT / 0.35);
+    this.group.position.copy(this.pos);
+    this.group.position.y -= Math.max(0, this.downT - 2.2) * 0.9;
+    this.group.rotation.set(-t * 1.45, this.yaw, 0, 'YXZ');
+    this.cone.visible = false; this.lanGlow.visible = false;
+    if (this.mark) this.mark.visible = false;
+    if (this.downT > 3.4) this.dead = true;
   }
 
   face(x, z, dt, k) {
@@ -386,6 +426,7 @@ class Guard {
     this.lan.rotation.x = -this.armL.rotation.x;
     this.lanGlow.visible = this.lit;
     this.body.rotation.y = this.lookYaw * 0.5;
+    if (this.mark) { this.mark.rotation.y += (dt || 0.016) * 2.5; this.mark.position.y = 2.75 + Math.sin(this.t * 3) * 0.08; }
     // eye + view direction (used by perception, cone and spotlight)
     const ly = this.yaw + this.lookYaw;
     this.eye.set(p.x, p.y + 1.6, p.z);
@@ -422,6 +463,7 @@ export class Actors {
       this.group.add(s, s.target);
       this.spots.push(s);
     }
+    this.markMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(0xff3b2f).multiplyScalar(2.2), fog: false });
     this.smokeMat = new THREE.MeshToonMaterial({ color: 0xcfc6e6, gradientMap: game.mats.toon.gradientMap });
     this.starMat = game.mats.toon;
     this.initParticles();
@@ -471,12 +513,29 @@ export class Actors {
     this.alert = 'calm'; this.seenT = 99; this.detect = 0;
     this.guards = this.guards.filter((g) => { if (g.extra) { g.remove(); return false; } return true; });
     for (const g of this.guards) {
+      if (g.downT >= 0) continue;
       g.aware = 0; g.stun = 0; g.lit = true; g.attackT = 0; g.climb = null;
       if (!g.tower) { g.state = 'patrol'; g.wait = 1; const h = g.home[0]; g.pos.set(h[0], this.game.world.highest(h[0], h[1]), h[1]); g.vel.set(0, 0, 0); g.grounded = true; g.sync(0); }
       else { g.lampOff = 0; g.fireT = 2; }
     }
     for (const s of this.shots) s.mesh.removeFromParent();
     this.shots.length = 0;
+  }
+
+  loseTrail(searchFor) {
+    this.alert = 'search'; this.searchT = searchFor; this.seenT = 99;
+    for (const g of this.guards) if (!g.tower && g.state === 'chase') { g.state = 'search'; g.wait = 5 + Math.random() * 2; g.target = { x: this.lastKnown.x, z: this.lastKnown.z }; g.aware = 0.3; }
+  }
+  // The job is done: the whole watch turns out. Not counted as being spotted.
+  manhunt() {
+    const pl = this.game.player;
+    this.alert = 'alert'; this.alertT = 0; this.seenT = 0; this.spawnT = 2.5;
+    this.lastKnown.copy(pl.pos);
+    for (const g of this.guards) {
+      if (g.downT >= 0) continue;
+      if (g.tower) { g.aware = 1; continue; }
+      if (!g.role && Math.hypot(g.pos.x - pl.pos.x, g.pos.z - pl.pos.z) < 40) { g.state = 'chase'; g.aware = 1; g.sideT = 0; }
+    }
   }
 
   raiseAlert(src) {
@@ -524,6 +583,47 @@ export class Actors {
   }
 
   // ----------------------------------------------------------------- tools
+  // ---------------------------------------------------------- takedowns
+  // A guard close in front of the player who is not fighting back.
+  takedownTarget(pl) {
+    let best = null, bd = 2.5;
+    const fx = -Math.sin(pl.yaw), fz = -Math.cos(pl.yaw);
+    for (const g of this.guards) {
+      if (g.tower || g.downT >= 0 || !g.group.visible) continue;
+      const dx = g.pos.x - pl.pos.x, dz = g.pos.z - pl.pos.z, d = Math.hypot(dx, dz);
+      if (d > bd || Math.abs(g.pos.y - pl.pos.y) > 1.7) continue;
+      if (d > 0.4 && (dx * fx + dz * fz) / d < 0.3) continue;
+      if (g.state === 'chase' && g.stun <= 0 && !g.role) continue;
+      best = g; bd = d;
+    }
+    return best;
+  }
+  takedown(g, air) {
+    const game = this.game, w = game.world;
+    g.downT = 0; g.vel.set(0, 0, 0); g.attackT = 0; g.stun = 0;
+    this.burst({ x: g.pos.x, y: g.pos.y + 1.2, z: g.pos.z }, 0xd8412f, 26, 5, 3);
+    game.onTakedown(g, air);
+    // anyone who sees it raises the cry
+    for (const o of this.guards) {
+      if (o === g || o.tower || o.downT >= 0) continue;
+      const d = Math.hypot(o.pos.x - g.pos.x, o.pos.z - g.pos.z);
+      if (d > 14 || !w.los(o.eye.x, o.eye.y, o.eye.z, g.pos.x, g.pos.y + 1, g.pos.z)) continue;
+      o.aware = Math.min(1, o.aware + 0.75);
+      o.target = { x: g.pos.x, z: g.pos.z };
+      if (o.state === 'patrol') { o.state = 'investigate'; o.wait = 7; }
+      o.barkCd = 0; this.barkT = 0; o.bark('body');
+    }
+  }
+  // Landing on a guard from above takes them down.
+  tryAirKill(p, fall) {
+    if (fall < 1.4) return false;
+    for (const g of this.guards) {
+      if (g.tower || g.downT >= 0 || !g.group.visible) continue;
+      if (Math.hypot(g.pos.x - p.x, g.pos.z - p.z) < 1.5 && Math.abs(g.pos.y - p.y) < 1.3) { this.takedown(g, true); return true; }
+    }
+    return false;
+  }
+
   throwShuriken(cam) {
     const S = shared();
     const d = new THREE.Vector3(); cam.getWorldDirection(d);
@@ -534,19 +634,20 @@ export class Actors {
     this.shots.push({ kind: 'star', mesh: m, pos: p, vel: d.multiplyScalar(48), life: 1.6 });
     this.game.audio.throwS();
   }
-  fireArrow(from, pl) {
+  fireArrow(from, pl, kind = 'arrow') {
     const S = shared();
-    const m = new THREE.Mesh(S.arrow, this.game.mats.toon);
+    const m = new THREE.Mesh(kind === 'kunai' ? S.star : S.arrow, this.game.mats.toon);
+    if (kind === 'kunai') m.scale.set(1.3, 1.3, 1.3);
     const p = from.clone();
     const tgt = new THREE.Vector3(pl.pos.x, pl.chestY, pl.pos.z);
-    const dist = p.distanceTo(tgt), sp = 36, t = dist / sp;
+    const dist = p.distanceTo(tgt), sp = kind === 'kunai' ? 30 : 36, t = dist / sp;
     // lead the target a little, but not perfectly: arrows should be dodgeable
     tgt.x += pl.vel.x * t * 0.75; tgt.z += pl.vel.z * t * 0.75; tgt.y += 0.5 * 5 * t * t;
     const v = tgt.sub(p).normalize().multiplyScalar(sp);
     m.position.copy(p);
     this.group.add(m);
-    this.shots.push({ kind: 'arrow', mesh: m, pos: p, vel: v, life: 3 });
-    this.game.audio.bow();
+    this.shots.push({ kind, mesh: m, pos: p, vel: v, life: 3, minD: 99 });
+    if (kind === 'kunai') this.game.audio.throwS(); else this.game.audio.bow();
     this.game.ui.arrowWarn(from);
   }
   dropSmoke(x, y, z) {
@@ -561,11 +662,11 @@ export class Actors {
     }
     this.smokes.push({ x, y: y + 1.2, z, t: 0, life: 7, r: 5.2, meshes });
     this.game.audio.smoke();
+    if (this.game.hunter) this.game.hunter.blind(x, z);
     // everyone nearby loses you
     if (this.alert === 'alert') {
-      this.alert = 'search'; this.searchT = 11; this.seenT = 99;
-      for (const g of this.guards) if (!g.tower && g.state === 'chase') { g.state = 'search'; g.wait = 5 + Math.random() * 2; g.target = { x: this.lastKnown.x, z: this.lastKnown.z }; g.aware = 0.3; }
-      this.guards.find((g) => !g.tower)?.bark('smoke');
+      this.loseTrail(11);
+      this.guards.find((g) => !g.tower && g.downT < 0)?.bark('smoke');
       this.game.onEscapeAlert(true);
     }
     for (const g of this.guards) if (!g.tower && Math.hypot(g.pos.x - x, g.pos.z - z) < 8) g.aware = Math.min(g.aware, 0.2);
@@ -582,7 +683,9 @@ export class Actors {
         s.vel.y -= (s.kind === 'star' ? 5 : 5) * (dt / steps);
         s.pos.addScaledVector(s.vel, dt / steps);
         if (s.kind === 'star') {
-          for (const g of this.guards) {
+          const h = game.hunter;
+          if (h && h.hitTest(s.pos)) { h.stagger(); this.burst(s.pos, 0xffffff, 12); dead = true; }
+          if (!dead) for (const g of this.guards) {
             if (g.tower) {
               if (g.lampOff <= 0 && s.pos.distanceTo(g.lamp.position) < 0.9) { g.lampOff = 14; g.aware = 0; game.audio.snuff(); g.barkCd = 0; this.barkT = 0; g.bark('blind'); game.onStyle('Lights Out', 60); this.burst(s.pos, 0xffc46a, 10); dead = true; }
               else if (Math.hypot(s.pos.x - g.pos.x, s.pos.z - g.pos.z) < 0.6 && s.pos.y > g.pos.y && s.pos.y < g.pos.y + 1.9) { dead = true; game.audio.thunk(); }
@@ -603,14 +706,20 @@ export class Actors {
           }
         } else {
           const dx = s.pos.x - pl.pos.x, dz = s.pos.z - pl.pos.z, dy = s.pos.y - pl.pos.y;
-          if (Math.hypot(dx, dz) < 0.5 && dy > -0.1 && dy < pl.height + 0.1) { dead = true; game.damage(22, 'arrow', null, s.vel); }
+          s.minD = Math.min(s.minD, Math.hypot(dx, dz, dy - 1.1));
+          if (Math.hypot(dx, dz) < 0.5 && dy > -0.1 && dy < pl.height + 0.1) { dead = true; s.hit = true; game.damage(s.kind === 'kunai' ? 18 : 22, s.kind, null, s.vel); }
           else if (s.pos.y < 0 || w.solidAt(s.pos.x, s.pos.y, s.pos.z)) { dead = true; game.audio.thunk(); this.burst(s.pos, 0xd9c7a0, 4); }
         }
       }
       s.mesh.position.copy(s.pos);
       if (s.kind === 'star') { s.mesh.rotation.y += dt * 40; }
-      else s.mesh.lookAt(_v.copy(s.pos).sub(s.vel));
-      if (dead) { s.mesh.removeFromParent(); this.shots.splice(i, 1); }
+      else if (s.kind === 'arrow') s.mesh.lookAt(_v.copy(s.pos).sub(s.vel));
+      if (s.kind === 'kunai') s.mesh.rotation.y += dt * 30;
+      if (dead) {
+        // dodged by a hair
+        if (s.kind !== 'star' && !s.hit && s.minD < 1.4 && !game.over) game.onCloseCall();
+        s.mesh.removeFromParent(); this.shots.splice(i, 1);
+      }
     }
     for (let i = this.smokes.length - 1; i >= 0; i--) {
       const s = this.smokes[i];

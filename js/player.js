@@ -37,18 +37,16 @@ export class Player {
     this.airStart = null; this.stepAcc = 0; this.throwT = 0;
     this.inShadow = false; this.shadowT = 0; this.speed = 0; this.noiseT = 0;
     this.dead = false; this.frozen = false; this.lastSafe = { x: sp.x, y: sp.y, z: sp.z };
+    this.flip = null; this.airFlips = 0; this.flipKind = 'front'; this.underCd = 0; this.speedT = 0;
   }
 
   get height() { return this.crouch || this.sliding ? H_CROUCH : H_STAND; }
   get chestY() { return this.pos.y + (this.crouch || this.sliding ? 0.6 : 1.15); }
 
+  // Flow is the speed meter; tricks go to the combo counter (main.js).
   addFlow(v, pts = 0, label = null) {
     this.flow = clamp(this.flow + v, 0, 1);
-    if (pts) {
-      const gain = Math.round(pts * (1 + this.flow * 2));
-      this.style += gain;
-      if (label) this.game.onStyle(label, gain);
-    }
+    if (pts && label) this.game.onTrick(label, Math.round(pts * (1 + this.flow)));
   }
 
   // ------------------------------------------------------------------ update
@@ -69,6 +67,7 @@ export class Player {
     this.wallCd = Math.max(0, this.wallCd - dt);
     this.hookCd = Math.max(0, this.hookCd - dt);
     this.throwT = Math.max(0, this.throwT - dt);
+    this.underCd -= dt;
     const maxRun = RUN * (1 + this.flow * g.stats.flowBonus);
 
     if (input.hookPressed) this.tryHook();
@@ -104,6 +103,8 @@ export class Player {
           hs = Math.hypot(v.x, v.z);
           if (hs > 17) { v.x *= 17 / hs; v.z *= 17 / hs; }
           if (hs < 3.4 || (!input.crouch && this.slideT > 0.3) || this.slideT > 2.6) { this.sliding = false; this.crouch = input.crouch; g.audio.slide(false); }
+          // ducking under a beam that would stop a standing runner
+          if (this.underCd <= 0 && w.solidAt(this.pos.x, this.pos.y + 1.4, this.pos.z)) { this.underCd = 1.2; this.addFlow(0.08, 60, 'Slide Under'); }
         } else {
           this.crouch = input.crouch;
           const target = this.crouch ? SNEAK : maxRun;
@@ -119,6 +120,11 @@ export class Player {
         // ---- air
         this.coyote = Math.max(0, this.coyote - dt);
         if (this.jumpBuf > 0 && this.coyote > 0) this.jump(1);
+        else if (input.jumpPressed && this.state === 'air' && !this.flip) this.tryFlip(input);
+        if (this.flip) {
+          this.flip.t += dt;
+          if (this.flip.t >= this.flip.dur) { this.airFlips++; this.flip = null; }
+        }
         if (this.state === 'wallrun') this.updateWallrun(dt, input, wx, wz);
         else {
           v.y -= GRAV * (v.y > 0 && !input.jump ? 1.9 : 1) * dt;
@@ -137,6 +143,9 @@ export class Player {
     this.pos.x = clamp(this.pos.x, b.x0, b.x1); this.pos.z = clamp(this.pos.z, b.z0, b.z1);
     if (this.pos.y < -0.55 && w.isWater(this.pos.x, this.pos.z)) g.onSplash();
     this.speed = Math.hypot(this.vel.x, this.vel.z);
+    // holding top speed pays
+    if (this.speed > 10.3 && this.state !== 'hook') { this.speedT += dt; if (this.speedT > 2.2) { this.speedT = -5; this.addFlow(0.05, 70, 'Speed Demon'); } }
+    else if (this.speedT > 0) this.speedT = 0; else this.speedT = Math.min(0, this.speedT + dt);
     // flow decays when you dawdle
     this.flow = Math.max(0, this.flow - dt * (this.speed < 4 ? 0.3 : 0.04 * g.stats.flowDecay));
     // footsteps + noise
@@ -212,11 +221,25 @@ export class Player {
     p.y = gy; v.y = 0;
     this.grounded = true; this.state = 'ground'; this.lastWall = null;
     const hs = Math.hypot(v.x, v.z);
+    const fall = (impact * impact) / (2 * GRAV);
+    // dropping onto a guard is a takedown, and the guard breaks the fall
+    const airKill = impact > 4 && g.tryAirKill(p, fall);
+    const hay = solid && solid.hay;
+    this.endAir(!airKill && !hay);
     if (this.airStart) {
       const d = Math.hypot(p.x - this.airStart.x, p.z - this.airStart.z);
-      if (d > 4.2) this.addFlow(0.1 + Math.min(0.1, d * 0.01), Math.round(d * 6), d > 7.5 ? 'Great Leap' : 'Leap');
+      if (d > 8.5) this.addFlow(0.2, Math.round(d * 9), 'Huge Gap');
+      else if (d > 4.2) this.addFlow(0.1 + Math.min(0.1, d * 0.01), Math.round(d * 6), d > 6.5 ? 'Rooftop Gap' : 'Leap');
     }
     this.airStart = null;
+    if (hay) {
+      // a cart of straw: any height is safe, and from high up it is a Leap of Faith
+      this.dipV -= 5; this.shake = 0.2;
+      g.onHayLanding(fall);
+      return;
+    }
+    if (airKill) { this.dipV -= 3; v.x *= 0.6; v.z *= 0.6; return; }
+    if (solid && (solid.x1 - solid.x0 < 0.8 || solid.z1 - solid.z0 < 0.8) && hs > 2 && fall > 0.6) this.addFlow(0.05, 45, 'Precision');
     const rolling = this.rollBuf > 0 && impact > 9;
     if (rolling) {
       this.rollAnim = 1; this.addFlow(0.1, 40, 'Roll');
@@ -238,6 +261,43 @@ export class Player {
     g.onLand(impact, p);
   }
 
+  // A second LEAP press in the air flips: forward, back (stick back) or sideways (stick sideways).
+  tryFlip(input) {
+    const w = this.game.world, p = this.pos, v = this.vel;
+    const h = p.y - w.groundAt(p.x, p.z, p.y, 0);
+    const tLand = (v.y + Math.sqrt(Math.max(0, v.y * v.y + 2 * GRAV * h))) / GRAV;
+    if (tLand < 0.42) return;
+    let kind = 'front';
+    if (input.moveZ < -0.4) kind = 'back';
+    else if (Math.abs(input.moveX) > 0.55) kind = input.moveX > 0 ? 'right' : 'left';
+    if (!this.airFlips) this.flipKind = kind;
+    this.flip = { t: 0, dur: 0.44, kind };
+    this.jumpBuf = 0;
+    v.y = Math.max(v.y, 2.4);
+    this.game.audio.flip();
+  }
+
+  // Air time is over: pay out the flips, or bail if one was only half done when we hit the ground.
+  endAir(landing) {
+    let n = this.airFlips;
+    if (this.flip) {
+      if (this.flip.t / this.flip.dur > 0.75) n++;
+      else if (landing) { this.flip = null; this.airFlips = 0; this.bail(); return; }
+      this.flip = null;
+    }
+    this.airFlips = 0;
+    if (!n) return;
+    const name = { front: 'Front Flip', back: 'Backflip', left: 'Aerial', right: 'Aerial' }[this.flipKind];
+    this.game.tally.flips += n;
+    this.game.onTrick(n === 1 ? name : n === 2 ? 'Double ' + name : 'Triple ' + name, 90 * n * n, n >= 2);
+  }
+
+  bail() {
+    this.vel.x *= 0.25; this.vel.z *= 0.25;
+    this.shake = 1; this.dipV -= 6; this.flow *= 0.3;
+    this.game.onBail();
+  }
+
   // Ledge detection: is there a surface within reach just ahead?
   tryMantle(dx, dz, vault) {
     const w = this.game.world, p = this.pos;
@@ -252,6 +312,7 @@ export class Player {
       const hs = Math.hypot(this.vel.x, this.vel.z);
       const quick = rise < 1.35;
       this.mantle = { x0: p.x, y0: p.y, z0: p.z, x1: px, y1: top + 0.02, z1: pz, t: 0, dur: quick ? 0.2 + rise * 0.06 : 0.26 + rise * 0.15, dx, dz, speed: quick ? Math.max(hs * 0.92, 5) : Math.max(4.4, hs * 0.5), quick };
+      this.endAir(false);
       this.state = 'mantle'; this.grounded = false; this.sliding = false; this.crouch = false;
       this.vel.set(0, 0, 0);
       this.game.audio.mantle(quick);
@@ -283,6 +344,7 @@ export class Player {
     const tl = Math.hypot(tx, tz);
     if (tl < 3) return;
     tx /= tl; tz /= tl;
+    this.endAir(false);
     this.state = 'wallrun'; this.wallT = 0;
     this.wallN = [out.nx, out.nz]; this.wallDir = [tx, tz]; this.wallSpeed = Math.max(tl, 8.4);
     this.lastWall = out.solid;
@@ -318,6 +380,7 @@ export class Player {
 
   enterRope(r) {
     const p = this.pos, v = this.vel;
+    this.endAir(false);
     this.state = 'rope'; this.rope = r; this.grounded = false; this.sliding = false; this.crouch = false;
     this.ropeS = r._t * r.len;
     this.ropeV = v.x * r.ux + v.z * r.uz;
@@ -373,6 +436,7 @@ export class Player {
       if (dot > bestDot && g.world.los(cam.x, cam.y, cam.z, a.x, a.y, a.z)) { bestDot = dot; best = a; }
     }
     if (!best) { g.audio.deny(); return; }
+    this.endAir(false);
     this.hook = { a: best, t: 0 };
     this.state = 'hook'; this.grounded = false; this.sliding = false; this.crouch = false; this.rope = null;
     this.airStart = { x: this.pos.x, z: this.pos.z, y: this.pos.y };
@@ -436,9 +500,15 @@ export class Player {
     this.shake = Math.max(0, this.shake - dt * 2.4);
     const sh = this.shake * this.shake * 0.05;
     cam.position.set(p.x + Math.cos(this.yaw) * bobX + (Math.random() - 0.5) * sh, this.yVis + this.eye + bobY + this.dip + (Math.random() - 0.5) * sh, p.z - Math.sin(this.yaw) * bobX);
-    cam.rotation.set(this.pitch + pitchAdd, this.yaw, this.roll);
+    let flipP = 0, flipR = 0;
+    if (this.flip) {
+      const k = smooth(0, 1, this.flip.t / this.flip.dur) * Math.PI * 2;
+      if (this.flip.kind === 'front') flipP = -k; else if (this.flip.kind === 'back') flipP = k;
+      else flipR = this.flip.kind === 'right' ? -k : k;
+    }
+    cam.rotation.set(this.pitch + pitchAdd + flipP, this.yaw, this.roll + flipR);
     const sp = Math.hypot(this.vel.x, this.vel.y * 0.5, this.vel.z);
-    const fovT = this.game.settings.fov + smooth(7, 17, sp) * 13 + (this.state === 'hook' ? 8 : 0) + (this.sliding ? 4 : 0);
+    const fovT = this.game.settings.fov + smooth(7, 17, sp) * 13 + (this.state === 'hook' ? 8 : 0) + (this.sliding ? 4 : 0) + (this.flip ? 10 : 0) + this.game.fovKick;
     this.fov = damp(this.fov, fovT, 5, dt);
     this.applyFov(this.fov);
     this.updateArms(dt);
@@ -526,6 +596,8 @@ export class Player {
       rp = [0.24, -0.36, -0.04]; rr = [1.08, 0.2, 0]; lp = [-0.36, -0.56, 0.05]; lr = [0.8, -0.3, 0];
     } else if (this.sliding) {
       rp = [0.38, -0.5, 0.02]; rr = [0.6, 0.5, 0.2]; lp = [-0.46, -0.62, 0.14]; lr = [0.15, -0.9, 0];
+    } else if (this.flip) {
+      rp = [0.24, -0.26, -0.08]; rr = [1.35, 0.4, 0.3]; lp = [-0.24, -0.26, -0.08]; lr = [1.35, -0.4, -0.3];
     } else if (!this.grounded) {
       const up = clamp(this.vel.y / 8, -1, 1);
       rp = [0.4, -0.46 + up * 0.05, 0.0]; rr = [0.95 + up * 0.2, 0.12, -0.2]; lp = [-0.4, -0.46 + up * 0.05, 0.0]; lr = [0.95 + up * 0.2, -0.12, 0.2];
