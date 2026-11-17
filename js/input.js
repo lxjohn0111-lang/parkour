@@ -102,6 +102,7 @@ export class Input {
   reset() {
     this.keys.clear(); this.jump = false; this.crouchToggle = false; this.endFrame();
     this.joy.id = -1; this.lookTouch.id = -1;
+    document.querySelectorAll('.tb.held').forEach((el) => el.classList.remove('held'));
     this.updateStick();
   }
 
@@ -111,43 +112,55 @@ export class Input {
     if (!root) return;
     this.stick = document.getElementById('stick'); this.knob = document.getElementById('knob');
     const zone = document.getElementById('touch-zone');
-    const enable = () => { if (!this.touch) { this.touch = true; document.body.classList.add('touch'); } };
-    addEventListener('touchstart', enable, { passive: true, once: true });
-    zone.addEventListener('touchstart', (e) => {
+    const enable = () => {
+      if (this.touch) return;
+      this.touch = true;
+      document.body.classList.add('touch');
+      this.game.onTouchMode && this.game.onTouchMode();
+    };
+    // phones and tablets switch to touch controls up front; anything else on its first finger
+    try { if (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches) enable(); } catch (e) { /* old browser */ }
+    addEventListener('touchstart', enable, { passive: true, capture: true });
+    addEventListener('pointerdown', (e) => { if (e.pointerType === 'touch' || e.pointerType === 'pen') enable(); }, { passive: true, capture: true });
+
+    // Pointer Events: one id per finger, delivered the same way in browsers and in-app web views.
+    zone.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse') return;
       e.preventDefault();
-      for (const t of e.changedTouches) {
-        if (t.clientX < innerWidth * 0.42 && this.joy.id < 0) Object.assign(this.joy, { id: t.identifier, ox: t.clientX, oy: t.clientY, x: t.clientX, y: t.clientY });
-        else if (this.lookTouch.id < 0) Object.assign(this.lookTouch, { id: t.identifier, x: t.clientX, y: t.clientY });
-      }
+      enable();
+      const x = e.clientX, y = e.clientY;
+      if (x < innerWidth * 0.45 && this.joy.id < 0) Object.assign(this.joy, { id: e.pointerId, ox: x, oy: y, x, y });
+      else if (this.lookTouch.id < 0) Object.assign(this.lookTouch, { id: e.pointerId, x, y });
+      try { zone.setPointerCapture(e.pointerId); } catch (err) { /* capture is optional */ }
       this.updateStick();
-    }, { passive: false });
-    zone.addEventListener('touchmove', (e) => {
-      e.preventDefault();
-      for (const t of e.changedTouches) {
-        if (t.identifier === this.joy.id) { this.joy.x = t.clientX; this.joy.y = t.clientY; }
-        else if (t.identifier === this.lookTouch.id) {
-          if (this.enabled) {
-            this.lookX += (t.clientX - this.lookTouch.x) * 0.0052 * this.sens;
-            this.lookY += (t.clientY - this.lookTouch.y) * 0.0052 * this.sens * (this.invertY ? -1 : 1);
-          }
-          this.lookTouch.x = t.clientX; this.lookTouch.y = t.clientY;
+    });
+    zone.addEventListener('pointermove', (e) => {
+      if (e.pointerId === this.joy.id) { this.joy.x = e.clientX; this.joy.y = e.clientY; this.updateStick(); }
+      else if (e.pointerId === this.lookTouch.id) {
+        if (this.enabled) {
+          this.lookX += (e.clientX - this.lookTouch.x) * 0.0052 * this.sens;
+          this.lookY += (e.clientY - this.lookTouch.y) * 0.0052 * this.sens * (this.invertY ? -1 : 1);
         }
+        this.lookTouch.x = e.clientX; this.lookTouch.y = e.clientY;
       }
-      this.updateStick();
-    }, { passive: false });
+    });
     const end = (e) => {
-      for (const t of e.changedTouches) {
-        if (t.identifier === this.joy.id) this.joy.id = -1;
-        if (t.identifier === this.lookTouch.id) this.lookTouch.id = -1;
-      }
+      if (e.pointerId === this.joy.id) this.joy.id = -1;
+      if (e.pointerId === this.lookTouch.id) this.lookTouch.id = -1;
       this.updateStick();
     };
-    zone.addEventListener('touchend', end); zone.addEventListener('touchcancel', end);
+    for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) zone.addEventListener(t, end);
+    // no long-press menus, text selection or double-tap zoom while playing
+    const block = (e) => e.preventDefault();
+    zone.addEventListener('touchstart', block, { passive: false });
+    zone.addEventListener('contextmenu', block);
     root.querySelectorAll('[data-btn]').forEach((el) => {
       const b = el.dataset.btn;
-      el.addEventListener('touchstart', (e) => {
+      el.addEventListener('pointerdown', (e) => {
         e.preventDefault(); e.stopPropagation();
+        enable();
         el.classList.add('on');
+        try { el.setPointerCapture(e.pointerId); } catch (err) { /* optional */ }
         if (!this.enabled && b !== 'pause') return;
         if (b === 'jump') { this.jumpPressed = true; this.jump = true; }
         if (b === 'crouch') { this.crouchPressed = true; this.crouchToggle = !this.crouchToggle; el.classList.toggle('held', this.crouchToggle); }
@@ -155,9 +168,11 @@ export class Input {
         if (b === 'hook') this.hookPressed = true;
         if (b === 'smoke') this.smokePressed = true;
         if (b === 'pause') this.game.onPauseKey();
-      }, { passive: false });
-      const up = (e) => { e.preventDefault(); el.classList.remove('on'); if (b === 'jump') this.jump = false; };
-      el.addEventListener('touchend', up, { passive: false }); el.addEventListener('touchcancel', up, { passive: false });
+      });
+      const up = () => { el.classList.remove('on'); if (b === 'jump') this.jump = false; };
+      for (const t of ['pointerup', 'pointercancel', 'lostpointercapture']) el.addEventListener(t, up);
+      el.addEventListener('touchstart', block, { passive: false });
+      el.addEventListener('contextmenu', block);
     });
   }
   updateStick() {

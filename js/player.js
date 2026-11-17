@@ -440,8 +440,20 @@ export class Player {
     const sp = Math.hypot(this.vel.x, this.vel.y * 0.5, this.vel.z);
     const fovT = this.game.settings.fov + smooth(7, 17, sp) * 13 + (this.state === 'hook' ? 8 : 0) + (this.sliding ? 4 : 0);
     this.fov = damp(this.fov, fovT, 5, dt);
-    if (Math.abs(cam.fov - this.fov) > 0.01) { cam.fov = this.fov; cam.updateProjectionMatrix(); }
+    this.applyFov(this.fov);
     this.updateArms(dt);
+  }
+
+  // FOV settings are tuned for landscape. On narrow (portrait) screens, widen the vertical
+  // angle so the horizontal view stays usable.
+  applyFov(v) {
+    const cam = this.camera, a = cam.aspect, ref = 1.45;
+    let f = v;
+    if (a < ref) f = Math.min(106, (2 * Math.atan(Math.tan((v * Math.PI) / 360) * Math.min(2.4, ref / a)) * 180) / Math.PI);
+    if (Math.abs(cam.fov - f) > 0.01) { cam.fov = f; cam.updateProjectionMatrix(); }
+    // on narrow screens pull the hands in so they stay clear of the touch buttons
+    const k = Math.max(0.62, Math.min(1, a / ref));
+    if (this.arms.scale.x !== k) this.arms.scale.setScalar(k);
   }
 
   // -------------------------------------------------------------------- arms

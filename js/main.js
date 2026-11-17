@@ -202,6 +202,7 @@ class Game {
     this.ui.intro(this.def, this.pal);
     this.ui.set('obj-title', this.def.endless || this.def.daily ? this.def.name.toUpperCase() : `NIGHT ${this.def.id} · ${this.pal.name.toUpperCase()}`);
     this.ui.set('obj-text', 'Reach the kite');
+    if (this.input.touch && innerHeight > innerWidth) this.ui.toast('Turn your phone sideways for a wider view');
     Save.data.totals.runs++; Save.save();
     this.fadeTarget = 0;
     this.busy = false;
@@ -232,6 +233,10 @@ class Game {
   }
   onLockFailed() {
     if (this.state === 'playing') this.ui.hint('Hold the left mouse button and drag to look &nbsp;·&nbsp; <kbd>F</kbd> throws a shuriken', 9);
+  }
+  onTouchMode() {
+    // touch players get the touch wording in the hints of the current run too
+    if (this.def && this.state === 'playing') this.hintQ = this.hintQ.map((h) => { const e = Object.values(HINTS).find((x) => x[0] === h); return e ? e[1] : h; });
   }
   onPointerUnlock() { if (this.state === 'playing' && !this.input.touch) this.pause(); }
   onPauseKey() {
@@ -540,7 +545,7 @@ class Game {
     cam.position.set(this.finaleFrom.x + (g.x - this.finaleFrom.x) * Math.min(1, t * 2), this.finaleFrom.y + 2 + k * 16 - t * t * 0.6, this.finaleFrom.z - k * 70 - t * 6);
     cam.rotation.set(-0.22 - k * 0.12, damp(cam.rotation.y, 0, 3, dt), Math.sin(t * 1.3) * 0.05);
     this.player.fov = damp(this.player.fov, 96, 3, dt);
-    cam.fov = this.player.fov; cam.updateProjectionMatrix();
+    this.player.applyFov(this.player.fov);
     this.player.arms.visible = false;
     if (t > 3.4 && this.state === 'finale') {
       this.set('results');
@@ -556,7 +561,7 @@ class Game {
     const z = 10 - ((t * 2.4) % span);
     cam.position.set(Math.sin(t * 0.11) * 13, 15.5 + Math.sin(t * 0.17) * 2.2, z);
     cam.rotation.set(-0.2 + Math.sin(t * 0.13) * 0.04, Math.sin(t * 0.09) * 0.4, 0);
-    if (cam.fov !== 68) { cam.fov = 68; cam.updateProjectionMatrix(); this.player.fov = 68; }
+    this.player.fov = 68; this.player.applyFov(68);
   }
 
   // Keep the shadow map centred ahead of the camera, snapped to texels to stop shimmer.
