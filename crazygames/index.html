@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>NEZUMI — Rooftop Escape</title>
+<meta name="description" content="First-person rooftop heists in old Edo: steal, assassinate or pickpocket, then outrun the Hound with flips, takedowns and combos.">
+<link rel="stylesheet" href="style.css">
+<script src="https://sdk.crazygames.com/crazygames-sdk-v3.js"></script>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<!-- kite frame shown during the escape glide -->
+<div id="kite" class="hidden"><i class="l"></i><i class="r"></i><i class="c"></i></div>
+
+<div id="hud" class="hidden">
+  <div class="tl">
+    <div class="crest"><span class="jp">鼠</span></div>
+    <div class="bars">
+      <div class="bar hp"><i id="hp-fill"></i></div>
+      <div class="bar flow"><i id="flow-fill"></i></div>
+      <div class="sub"><span id="flow-label">FLOW</span><span class="koban"><b class="coin"></b><span id="koban-n">0</span></span></div>
+    </div>
+  </div>
+  <div class="tc">
+    <svg id="eye" viewBox="0 0 120 60" aria-hidden="true">
+      <path class="lid" d="M4 30 Q60 -14 116 30 Q60 74 4 30 Z"/>
+      <g id="eye-open"><ellipse class="white" cx="60" cy="30" rx="40" ry="17"/><circle class="iris" cx="60" cy="30" r="13"/><circle class="pupil" cx="60" cy="30" r="5"/></g>
+      <rect id="eye-shut" x="20" y="27" width="80" height="6" rx="3"/>
+    </svg>
+    <div id="eye-meter"><i id="eye-fill"></i></div>
+    <div id="eye-label">UNSEEN</div>
+    <div id="hound" class="hidden"><span class="hl"><b class="jp">追手</b> THE HOUND</span><div class="track"><i id="hound-fill"></i></div><span id="hound-d">24 m</span></div>
+  </div>
+  <div class="tr">
+    <div id="obj-title">Night 1</div>
+    <div id="obj-text">Reach the kite</div>
+    <div class="row"><span id="timer">0:00.0</span><span id="dist">0 m</span></div>
+    <div id="contracts"></div>
+  </div>
+  <div class="br">
+    <div class="tool" id="tool-hook"><span class="key">E</span><span class="ico hook"></span><span class="n">鉤</span></div>
+    <div class="tool" id="tool-smoke"><span class="key">Q</span><span class="ico smoke"></span><span class="n" id="smoke-n">1</span></div>
+    <div class="tool" id="tool-star"><span class="key lmb">LMB</span><span class="ico star"></span><span class="n" id="star-n">4</span></div>
+  </div>
+  <div id="lockhint" class="hidden">CLICK TO TAKE CONTROL</div>
+  <div id="cross"><i></i></div>
+  <div id="threat"><i id="threat-arc"></i></div>
+  <div id="marker"><b></b><span id="marker-d"></span></div>
+  <div id="ring" class="hidden"></div>
+  <div id="arrow-warn" class="hidden"><i></i></div>
+  <div id="pops"></div>
+  <div id="combo" class="hidden">
+    <div class="top"><span id="combo-n">0</span><span class="x">TRICKS</span><span id="combo-m">×1.0</span></div>
+    <div id="combo-pts">0</div>
+    <div class="bar"><i id="combo-bar"></i></div>
+    <div id="combo-list"></div>
+  </div>
+  <div id="tier" class="hidden"><span class="jp"></span><span class="en"></span></div>
+  <div id="prompt" class="hidden"></div>
+  <div id="slash" class="hidden"><i></i><span class="jp">斬</span></div>
+  <div id="banner" class="hidden"><span class="jp"></span><span class="en"></span></div>
+  <div id="hint" class="hidden"></div>
+  <div id="subs" class="hidden"><div class="jp"></div><div class="en"></div></div>
+  <div id="intro" class="hidden"><div class="jp"></div><div class="t"></div><div class="d"></div><div class="x"></div><div class="c"></div></div>
+</div>
+
+<div id="touch">
+  <div id="touch-zone"></div>
+  <div id="stick"><i id="knob"></i></div>
+  <button data-btn="pause" class="tb pause">II</button>
+  <button data-btn="jump" class="tb jump">LEAP</button>
+  <button data-btn="crouch" class="tb crouch">SNEAK</button>
+  <button data-btn="throw" class="tb throw">STAR</button>
+  <button data-btn="smoke" class="tb smoke">SMOKE</button>
+  <button data-btn="hook" class="tb hook">HOOK</button>
+</div>
+
+<div id="fade"></div>
+
+<!-- screens -->
+<section id="s-loading" class="screen show">
+  <div class="load">
+    <div class="moon"><span class="jp">鼠</span></div>
+    <h1>NEZUMI</h1>
+    <p id="load-text">Lighting the lanterns…</p>
+    <div class="loadbar"><i id="load-fill"></i></div>
+  </div>
+</section>
+
+<section id="s-menu" class="screen">
+  <div class="title">
+    <div class="logo"><div class="moon"><span class="jp">鼠</span></div><div><h1>NEZUMI</h1><h2>ROOFTOP ESCAPE</h2></div></div>
+    <p class="tag">Edo sleeps. The night watch does not.</p>
+    <nav>
+      <button class="btn primary" id="b-play"><span>RUN</span><small id="b-play-sub">Night 1</small></button>
+      <button class="btn" id="b-nights"><span>NIGHTS</span><small>12 escapes</small></button>
+      <button class="btn" id="b-shop"><span>HIDEOUT</span><small>Upgrades</small></button>
+      <button class="btn" id="b-daily"><span>DAILY NIGHT</span><small id="b-daily-sub">New rooftops every day</small></button>
+      <button class="btn" id="b-endless"><span>ENDLESS</span><small id="b-endless-sub">Clear Night 4 to unlock</small></button>
+      <button class="btn ghost" id="b-settings"><span>SETTINGS</span></button>
+    </nav>
+  </div>
+  <div class="wallet"><span class="koban"><b class="coin"></b><span id="m-koban">0</span></span><span class="seal-n"><b class="seal on"></b><span id="m-seals">0</span></span><span class="cat-n">招 <span id="m-cats">0</span></span></div>
+</section>
+
+<section id="s-nights" class="screen panel-screen">
+  <div class="panel wide">
+    <header><h3>NIGHTS</h3><button class="x" data-back>BACK</button></header>
+    <div id="nights-grid"></div>
+  </div>
+</section>
+
+<section id="s-shop" class="screen panel-screen">
+  <div class="panel wide">
+    <header><h3>HIDEOUT</h3><span class="koban big"><b class="coin"></b><span id="shop-koban">0</span></span><button class="x" data-back>BACK</button></header>
+    <div id="shop-grid"></div>
+    <h4>WRIST WRAPS <small>earned with seals</small></h4>
+    <div id="wraps"></div>
+  </div>
+</section>
+
+<section id="s-settings" class="screen panel-screen">
+  <div class="panel">
+    <header><h3>SETTINGS</h3><button class="x" data-back>BACK</button></header>
+    <label>Look sensitivity <input type="range" id="set-sens" min="0.3" max="2.5" step="0.05"></label>
+    <label>Sound <input type="range" id="set-sfx" min="0" max="1" step="0.05"></label>
+    <label>Music <input type="range" id="set-music" min="0" max="1" step="0.05"></label>
+    <label>Field of view <input type="range" id="set-fov" min="65" max="100" step="1"></label>
+    <label>Graphics <select id="set-quality"><option value="-1">Auto</option><option value="0">Low</option><option value="1">Medium</option><option value="2">High</option></select></label>
+    <label class="check"><input type="checkbox" id="set-invert"> Invert look Y</label>
+    <div class="keys">
+      <div><kbd>W A S D</kbd> run</div><div><kbd>MOUSE</kbd> look</div><div><kbd>SPACE</kbd> leap · climb · wall kick</div>
+      <div><kbd>SHIFT</kbd> sneak · slide · roll</div><div><kbd>LMB</kbd> / <kbd>F</kbd> shuriken</div><div><kbd>Q</kbd> smoke bomb</div>
+      <div><kbd>E</kbd> / <kbd>RMB</kbd> grappling hook</div><div><kbd>R</kbd> back to checkpoint</div><div><kbd>ESC</kbd> pause</div>
+    </div>
+  </div>
+</section>
+
+<section id="s-pause" class="screen panel-screen">
+  <div class="panel narrow">
+    <header><h3>PAUSED</h3></header>
+    <div id="p-contracts"></div>
+    <button class="btn primary" id="p-resume"><span>RESUME</span></button>
+    <button class="btn" id="p-checkpoint"><span>BACK TO CHECKPOINT</span></button>
+    <button class="btn" id="p-restart"><span>RESTART NIGHT</span></button>
+    <button class="btn" id="p-settings"><span>SETTINGS</span></button>
+    <button class="btn ghost" id="p-quit"><span>QUIT TO MENU</span></button>
+    <p id="p-diag" class="diag hidden"></p>
+  </div>
+</section>
+
+<section id="s-failed" class="screen panel-screen dark">
+  <div class="panel narrow center">
+    <div class="stamp red"><span class="jp">御用</span></div>
+    <h3 class="big">CAPTURED</h3>
+    <p id="fail-text">The night watch has you.</p>
+    <button class="btn primary" id="f-checkpoint"><span>BACK TO CHECKPOINT</span></button>
+    <button class="btn gold" id="f-revive"><span>SLIP THE ROPES</span><small>Watch ad · carry on</small></button>
+    <button class="btn" id="f-restart"><span>RESTART NIGHT</span></button>
+    <button class="btn ghost" id="f-quit"><span>QUIT TO MENU</span></button>
+  </div>
+</section>
+
+<section id="s-results" class="screen panel-screen">
+  <div class="panel results">
+    <div class="res-head">
+      <div><div class="jp" id="r-jp">鼠走る</div><h3 id="r-title">ESCAPED</h3><p id="r-sub">Night 1 · The Rat Runs</p></div>
+      <div class="rank" id="r-rank">S</div>
+    </div>
+    <div class="res-body">
+      <div class="lines">
+        <div><span>Time</span><b id="r-time">0:00</b><i id="r-par"></i></div>
+        <div><span>Koban</span><b id="r-koban">0</b><i id="r-koban-x"></i></div>
+        <div><span>Style</span><b id="r-style">0</b><i id="r-flow"></i></div>
+        <div><span>Alarms raised</span><b id="r-alerts">0</b><i id="r-caught"></i></div>
+        <div class="total"><span>Score</span><b id="r-score">0</b><i id="r-best"></i></div>
+      </div>
+      <div class="seals">
+        <div class="sealbox" id="seal-0"><b class="seal"></b><span>ESCAPED</span><small>Reach the kite</small></div>
+        <div class="sealbox" id="seal-1"><b class="seal"></b><span>GHOST</span><small>No alarm before the job</small></div>
+        <div class="sealbox" id="seal-2"><b class="seal"></b><span>CONTRACTS</span><small id="seal-par">Both bonus contracts</small></div>
+        <div class="sealbox cat" id="seal-cat"><b class="jp">招</b><span>LUCKY CAT</span><small>Hidden on every night</small></div>
+      </div>
+    </div>
+    <div class="earn"><span>EARNED</span><span class="koban big"><b class="coin"></b><span id="r-earn">0</span></span><button class="btn gold small" id="r-double"><span>DOUBLE IT</span><small>Watch an ad</small></button></div>
+    <div class="res-btns">
+      <button class="btn primary" id="r-next"><span>NEXT NIGHT</span></button>
+      <button class="btn" id="r-retry"><span>RUN IT AGAIN</span></button>
+      <button class="btn" id="r-shop"><span>HIDEOUT</span></button>
+      <button class="btn ghost" id="r-menu"><span>MENU</span></button>
+    </div>
+  </div>
+</section>
+
+<div id="toast" class="hidden"></div>
+<div id="rotate">Rotate your device to landscape</div>
+<script src="game.js" defer></script>
+</body>
+</html>

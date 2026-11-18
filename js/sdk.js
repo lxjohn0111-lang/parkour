@@ -83,13 +83,32 @@ export const SDK = {
   midgame() { return this._ad('midgame'); },
   rewarded() { return this._ad('rewarded'); },
 
-  // Persistent data: CrazyGames cloud save when available, localStorage otherwise.
+  // ---- Progress: the CrazyGames data module when the SDK is running (saved to the player's
+  // CrazyGames account and synced across devices), the browser's localStorage otherwise.
+  get dataModule() {
+    if (this._locked) return this._data;
+    try { return this.available && this.sdk.data && typeof this.sdk.data.getItem === 'function' ? this.sdk.data : null; } catch (e) { return null; }
+  },
+  // Decide once where progress lives for this session. If the SDK only becomes ready after the
+  // game has loaded (very slow network), saves keep going where they were read from, so a late
+  // SDK can never overwrite the player's cloud progress with an empty local game.
+  lockStorage() { this._data = this.dataModule; this._locked = true; },
+  get storage() { return this.dataModule ? 'crazygames' : 'local'; },
   getItem(key) {
-    try { if (this.available && this.sdk.data) return this.sdk.data.getItem(key); } catch (e) { /* fall through */ }
-    try { return localStorage.getItem(key); } catch (e) { return null; }
+    const d = this.dataModule;
+    if (d) { try { return d.getItem(key); } catch (e) { console.warn('[sdk] data.getItem failed', e); } }
+    return this.localGet(key);
   },
   setItem(key, value) {
-    try { if (this.available && this.sdk.data) { this.sdk.data.setItem(key, value); return; } } catch (e) { /* fall through */ }
-    try { localStorage.setItem(key, value); } catch (e) { /* storage blocked */ }
+    const d = this.dataModule;
+    if (d) { try { d.setItem(key, value); return true; } catch (e) { console.warn('[sdk] data.setItem failed', e); } }
+    return this.localSet(key, value);
   },
+  removeItem(key) {
+    const d = this.dataModule;
+    if (d) { try { d.removeItem(key); } catch (e) { /* ignore */ } }
+    try { localStorage.removeItem(key); } catch (e) { /* storage blocked */ }
+  },
+  localGet(key) { try { return localStorage.getItem(key); } catch (e) { return null; } },
+  localSet(key, value) { try { localStorage.setItem(key, value); return true; } catch (e) { return false; } },
 };

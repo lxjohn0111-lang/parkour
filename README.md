@@ -48,20 +48,40 @@ npx serve .
 
 ## Publish on CrazyGames
 
-Upload the repository contents as the game build: `index.html`, `css/`, `js/`, `fonts/`
-and `vendor/`. `tools/` and this README are not needed at runtime. Everything is local
-except the CrazyGames SDK script itself; the build is about 1 MB.
+The ready-to-upload build is in **`crazygames/`** (and the same files zipped as
+**`crazygames.zip`**, with `index.html` at the root of the zip). Upload that zip, or the
+contents of the folder, as the game build. It is 9 files and about 0.9 MB (320 KB zipped):
 
-SDK v3 integration lives in `js/sdk.js`:
+| File | |
+| --- | --- |
+| `index.html` | the page, with the CrazyGames SDK v3 script tag |
+| `game.js` | all game code and three.js in one minified script |
+| `style.css`, `fonts/` | styles and the two web fonts |
+| `LICENSES.txt`, `fonts/OFL-*.txt` | third-party notices |
 
+Rebuild it after changing the game:
+
+```bash
+python3 tools/build-crazygames.py
+```
+
+(needs Node for `npx esbuild`; pass an esbuild path and a `three/build/three.module.js`
+from the `three` npm package as arguments for a smaller build.)
+
+SDK v3 integration lives in `js/sdk.js` and `js/save.js`:
+
+* **Progress is saved with the CrazyGames data module** (`SDK.data.getItem/setItem`), so it
+  follows the player's CrazyGames account. Saved: koban, unlocked nights, ranks, seals, lucky
+  cats, upgrades, wrist wrap, Endless and Daily bests, settings. Writes are debounced, skipped
+  when nothing changed, and flushed when the tab is hidden or closed. Progress a player already
+  had in this browser's localStorage is moved into the data module on first launch.
+  Without the SDK (ad blocker, other hosts) the game falls back to localStorage.
 * `SDK.init()` on boot, `loadingStart` / `loadingStop` around world generation.
-* `gameplayStart` / `gameplayStop` on every transition in and out of live play
-  (pause, capture, results, menus).
+* `gameplayStart` / `gameplayStop` on every transition in and out of live play.
 * `happytime()` on an S rank or a newly earned seal.
 * Midgame ads between runs (next night / retry), never on the very first run.
 * Rewarded ads: revive in place once per run, and double the koban on the results screen.
 * Audio is muted while an ad plays and follows the platform's mute setting.
-* Progress is stored through the SDK data module, with `localStorage` as the fallback.
 
 Every SDK call is guarded, so the game also runs where the SDK is missing or disabled.
 

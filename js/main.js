@@ -60,7 +60,7 @@ class Game {
   async boot() {
     const ui0 = (p, t) => { document.getElementById('load-fill').style.transform = `scaleX(${p})`; if (t) document.getElementById('load-text').textContent = t; };
     ui0(0.1);
-    await Promise.race([SDK.init(), new Promise((r) => setTimeout(r, 3500))]);
+    await Promise.race([SDK.init(), new Promise((r) => setTimeout(r, 8000))]);
     SDK.loadingStart();
     Save.load();
     this.settings = Save.data.settings;
